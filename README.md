@@ -89,7 +89,7 @@ set -g @worktree-fetch-timeout "60"
 
 ### Managed vs Existing Worktrees
 
-- **Managed worktrees**: Created via "New" in the Add Worktree menu. Stored in `@worktree-path/__tmux_managed__/`. When removed, both the worktree and branch are deleted.
+- **Managed worktrees**: Created via "New" in the Add Worktree menu. Stored in `@worktree-path/__tmux_worktree_managed__/`. When removed, both the worktree and branch are deleted.
 - **Existing worktrees**: Created from existing branches. When removed, only the worktree is deleted; the branch is preserved.
 
 ### Session Naming

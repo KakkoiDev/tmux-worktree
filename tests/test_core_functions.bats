@@ -250,7 +250,7 @@ teardown() {
     # Override WORKTREE_BASE for test isolation
     local test_worktree_base="${TEST_REPO_DIR}-worktree-base"
     WORKTREE_BASE="$test_worktree_base"
-    MANAGED_DIR="$WORKTREE_BASE/__tmux_managed__"
+    MANAGED_DIR="$WORKTREE_BASE/__tmux_worktree_managed__"
 
     # Create managed worktree
     mkdir -p "$MANAGED_DIR"

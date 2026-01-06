@@ -261,7 +261,7 @@ get_removable_worktree_data() {
                     gsub("/", "-", session_name)
 
                     # Check if worktree is in managed directory to decide whether to delete branch
-                    if (path ~ /__tmux_managed__/) {
+                    if (path ~ /__tmux_worktree_managed__/) {
                         # Managed worktree - remove both worktree and branch
                         print "\"" display_path " (" branch ")\" \"\" \"display-message \\\"Removing managed worktree and branch...\\\" ; run-shell \\\". " script_path " && remove_worktree \\\\\\\"" full_path "\\\\\\\" \\\\\\\"" branch "\\\\\\\" true \\\\\\\"" session_name "\\\\\\\" " current_page "\\\"\""
                     } else {
