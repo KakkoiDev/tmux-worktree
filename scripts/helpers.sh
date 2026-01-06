@@ -2,7 +2,36 @@
 # ==============================================================================
 # TMUX WORKTREES - Shared Helper Functions
 # ==============================================================================
-# Requires: bash 4.0+, tmux
+# Requires: bash 4.0+, tmux 3.0+
+
+# ==============================================================================
+# VERSION CHECKS
+# ==============================================================================
+
+# Check tmux version (display-menu requires 3.0+)
+# Returns 0 if compatible, 1 if not
+check_tmux_version() {
+    local version_string
+    local major_version
+
+    version_string=$(tmux -V 2>/dev/null | sed 's/[^0-9.]//g')
+    major_version=$(echo "$version_string" | cut -d. -f1)
+
+    if [ -z "$major_version" ] || [ "$major_version" -lt 3 ]; then
+        return 1
+    fi
+    return 0
+}
+
+# Display error if tmux version is incompatible
+ensure_tmux_version() {
+    if ! check_tmux_version; then
+        echo "Error: tmux-worktree requires tmux 3.0+ (display-menu support)" >&2
+        echo "Current version: $(tmux -V 2>/dev/null || echo 'unknown')" >&2
+        return 1
+    fi
+    return 0
+}
 
 # Determine plugin directory (works when sourced or executed)
 if [ -n "$TMUX_WORKTREES_PLUGIN_DIR" ]; then
@@ -94,6 +123,27 @@ get_session_name() {
     local branch="$2"
     local session_name="${project}-${branch}"
     echo "${session_name//\//-}"
+}
+
+# ==============================================================================
+# TIMEOUT HELPER (macOS compatibility)
+# ==============================================================================
+
+# Portable timeout command wrapper
+# On Linux: uses coreutils timeout
+# On macOS: uses gtimeout (from coreutils) or falls back to no timeout
+run_with_timeout() {
+    local seconds="$1"
+    shift
+
+    if command -v timeout >/dev/null 2>&1; then
+        timeout "$seconds" "$@"
+    elif command -v gtimeout >/dev/null 2>&1; then
+        gtimeout "$seconds" "$@"
+    else
+        # No timeout available - run without timeout protection
+        "$@"
+    fi
 }
 
 # ==============================================================================

@@ -4,6 +4,7 @@
 # ==============================================================================
 # TPM entry point for tmux-worktree plugin
 # Installs keybinding and sets up environment
+# Requires: tmux 3.0+, bash 4.0+
 
 # Determine plugin directory
 CURRENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -12,6 +13,11 @@ export TMUX_WORKTREES_PLUGIN_DIR="$CURRENT_DIR"
 # Source helpers
 SCRIPTS_DIR="$CURRENT_DIR/scripts"
 source "$SCRIPTS_DIR/helpers.sh"
+
+# Check tmux version compatibility
+if ! ensure_tmux_version; then
+    exit 1
+fi
 
 # Load configuration
 load_config

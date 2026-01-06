@@ -39,8 +39,8 @@ fetch_remote_branches() {
     # Display fetching message
     tmux display-message "Fetching remote branches..."
 
-    # Run git fetch with timeout
-    if timeout "$timeout_seconds" git fetch --all --prune 2>/dev/null; then
+    # Run git fetch with timeout (uses portable timeout wrapper)
+    if run_with_timeout "$timeout_seconds" git fetch --all --prune 2>/dev/null; then
         tmux display-message "Remote branches fetched successfully"
         return 0
     else
@@ -54,8 +54,12 @@ fetch_remote_branches() {
 # ==============================================================================
 
 # Get project name from git repository root directory
+# Sanitizes output to prevent command injection via malicious directory names
 get_project_name() {
-    basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+    local name
+    name=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)")
+    # Sanitize: allow only alphanumeric, dash, underscore, dot
+    echo "$name" | tr -cd 'a-zA-Z0-9_.-'
 }
 
 # Remove worktree helper function
@@ -67,7 +71,7 @@ remove_worktree() {
     local current_page="$5"
 
     # Remove the worktree with timeout protection
-    if timeout 10 git worktree remove --force "$worktree_path" > /dev/null 2>&1; then
+    if run_with_timeout 10 git worktree remove --force "$worktree_path" > /dev/null 2>&1; then
         tmux display-message "Worktree removed: $worktree_path"
     else
         tmux display-message "Warning: Worktree removal timed out or failed"
@@ -76,7 +80,7 @@ remove_worktree() {
 
     # If it's a managed worktree, also delete the branch with timeout
     if [ "$is_managed" = "true" ]; then
-        if timeout 5 git branch -D "$branch_name" > /dev/null 2>&1; then
+        if run_with_timeout 5 git branch -D "$branch_name" > /dev/null 2>&1; then
             tmux display-message "Branch deleted: $branch_name"
         else
             tmux display-message "Warning: Branch deletion failed: $branch_name"
@@ -109,7 +113,8 @@ get_worktree_data() {
         BEGIN {
             # Convert wildcard to regex
             if (filter != "") {
-                gsub(/\*/, ".*", filter)
+                gsub(/\./, "\\.", filter)  # Escape literal dots first
+                gsub(/\*/, ".*", filter)   # Then convert wildcards
                 gsub(/\?/, ".", filter)
                 filter = "^" filter "$"
             }
@@ -120,6 +125,8 @@ get_worktree_data() {
             display_path=path
             sub(home"/", "~/", display_path)
             sub("refs/heads/", "", branch)
+            # Sanitize branch name - remove shell metacharacters
+            gsub(/[^a-zA-Z0-9._\/-]/, "", branch)
 
             # Apply filter (case-insensitive)
             if (filter == "" || tolower(branch) ~ tolower(filter)) {
@@ -155,13 +162,17 @@ get_branch_data() {
     eval "$branch_cmd" | awk -v base="$WORKTREE_BASE" -v project="$project_name" -v filter="$sanitized_filter" '
         BEGIN {
             if (filter != "") {
-                gsub(/\*/, ".*", filter)
+                gsub(/\./, "\\.", filter)  # Escape literal dots first
+                gsub(/\*/, ".*", filter)   # Then convert wildcards
                 gsub(/\?/, ".", filter)
                 filter = "^" filter "$"
             }
         }
         {
             branch = $0
+            # Sanitize branch name - remove shell metacharacters
+            gsub(/[^a-zA-Z0-9._\/-]/, "", branch)
+
             # Determine if this is a remote branch
             is_remote = (index(branch, "/") > 0 && index(branch, "origin/") == 1)
 
@@ -210,7 +221,8 @@ get_removable_worktree_data() {
     git worktree list --porcelain | awk -v home="$HOME" -v current_dir="$(pwd)" -v script_path="$script_path" -v current_page="$page" -v project="$project_name" -v filter="$sanitized_filter" '
         BEGIN {
             if (filter != "") {
-                gsub(/\*/, ".*", filter)
+                gsub(/\./, "\\.", filter)  # Escape literal dots first
+                gsub(/\*/, ".*", filter)   # Then convert wildcards
                 gsub(/\?/, ".", filter)
                 filter = "^" filter "$"
             }
@@ -225,6 +237,8 @@ get_removable_worktree_data() {
                 display_path = path
                 sub(home"/", "~/", display_path)
                 sub("refs/heads/", "", branch)
+                # Sanitize branch name - remove shell metacharacters
+                gsub(/[^a-zA-Z0-9._\/-]/, "", branch)
 
                 # Apply filter (case-insensitive)
                 if (filter == "" || tolower(branch) ~ tolower(filter)) {
@@ -257,7 +271,8 @@ get_worktree_page_count() {
     total=$(git worktree list --porcelain | awk -v filter="$sanitized_filter" '
         BEGIN {
             if (filter != "") {
-                gsub(/\*/, ".*", filter)
+                gsub(/\./, "\\.", filter)  # Escape literal dots first
+                gsub(/\*/, ".*", filter)   # Then convert wildcards
                 gsub(/\?/, ".", filter)
                 filter = "^" filter "$"
             }
@@ -289,7 +304,8 @@ get_branch_page_count() {
     total=$(eval "$branch_cmd" | awk -v filter="$sanitized_filter" '
         BEGIN {
             if (filter != "") {
-                gsub(/\*/, ".*", filter)
+                gsub(/\./, "\\.", filter)  # Escape literal dots first
+                gsub(/\*/, ".*", filter)   # Then convert wildcards
                 gsub(/\?/, ".", filter)
                 filter = "^" filter "$"
             }
@@ -317,7 +333,8 @@ get_removable_worktree_page_count() {
     total=$(git worktree list --porcelain | awk -v current_dir="$(pwd)" -v filter="$sanitized_filter" '
         BEGIN {
             if (filter != "") {
-                gsub(/\*/, ".*", filter)
+                gsub(/\./, "\\.", filter)  # Escape literal dots first
+                gsub(/\*/, ".*", filter)   # Then convert wildcards
                 gsub(/\?/, ".", filter)
                 filter = "^" filter "$"
             }

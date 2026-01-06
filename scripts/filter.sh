@@ -3,7 +3,7 @@
 # TMUX WORKTREES - Filter Functions
 # ==============================================================================
 # Wildcard matching and input sanitization
-# Requires: bash 4.0+ (uses [[ ]] and case pattern matching)
+# Requires: bash 3.2+ (uses [[ ]] and case pattern matching)
 
 # Sanitize filter input to prevent shell injection
 # Allows: a-z A-Z 0-9 * ? - _ / space
@@ -26,12 +26,13 @@ matches_filter() {
         return 0
     fi
 
-    # Convert to lowercase for case-insensitive matching
-    local lower_string=$(echo "$string" | tr '[:upper:]' '[:lower:]')
-    local lower_pattern=$(echo "$pattern" | tr '[:upper:]' '[:lower:]')
+    # Convert to lowercase for case-insensitive matching (POSIX portable)
+    local lower_string
+    local lower_pattern
+    lower_string=$(echo "$string" | tr '[:upper:]' '[:lower:]')
+    lower_pattern=$(echo "$pattern" | tr '[:upper:]' '[:lower:]')
 
     # Use bash extended pattern matching
-    # Convert wildcard pattern to bash extglob pattern
     # * becomes * (works in case)
     # ? becomes ? (works in case)
     case "$lower_string" in
