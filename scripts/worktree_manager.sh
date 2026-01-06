@@ -44,7 +44,7 @@ fetch_remote_branches() {
         tmux display-message "Remote branches fetched successfully"
         return 0
     else
-        tmux display-message "Warning: Fetch timed out or failed (${timeout_seconds}s)"
+        tmux display-message "Fetch failed - try 'git fetch origin' manually or check network"
         return 1
     fi
 }
@@ -74,7 +74,7 @@ remove_worktree() {
     if run_with_timeout 10 git worktree remove --force "$worktree_path" > /dev/null 2>&1; then
         tmux display-message "Worktree removed: $worktree_path"
     else
-        tmux display-message "Warning: Worktree removal timed out or failed"
+        tmux display-message "Worktree removal failed - try 'git worktree remove $worktree_path' manually"
         git worktree remove --force "$worktree_path" > /dev/null 2>&1 || true
     fi
 
@@ -83,7 +83,7 @@ remove_worktree() {
         if run_with_timeout 5 git branch -D "$branch_name" > /dev/null 2>&1; then
             tmux display-message "Branch deleted: $branch_name"
         else
-            tmux display-message "Warning: Branch deletion failed: $branch_name"
+            tmux display-message "Branch deletion failed - try 'git branch -D $branch_name' manually"
         fi
     fi
 
@@ -119,7 +119,8 @@ get_worktree_data() {
                 filter = "^" filter "$"
             }
         }
-        /^worktree/ {path=$2;full_path=$2}
+        /^worktree/ {path=$2;full_path=$2;head_sha=""}
+        /^HEAD/ {head_sha=substr($2,1,7)}  # Capture short SHA for detached HEAD
         /^branch/ {
             branch=$2
             display_path=path
@@ -132,6 +133,18 @@ get_worktree_data() {
             if (filter == "" || tolower(branch) ~ tolower(filter)) {
                 session_name=project "-" branch
                 gsub("/", "-", session_name)
+                print "\"" display_path " (" branch ")\" \"\" \"run-shell \\\"tmux has-session -t " session_name " 2>/dev/null && tmux switch-client -t " session_name " || (tmux new-session -d -c \\\\\\\"" full_path "\\\\\\\" -s " session_name " && tmux switch-client -t " session_name ")\\\"\""
+            }
+        }
+        /^detached/ {
+            # Handle detached HEAD worktrees
+            display_path=path
+            sub(home"/", "~/", display_path)
+            branch="HEAD@" head_sha
+
+            # Apply filter (case-insensitive)
+            if (filter == "" || tolower(branch) ~ tolower(filter)) {
+                session_name=project "-detached-" head_sha
                 print "\"" display_path " (" branch ")\" \"\" \"run-shell \\\"tmux has-session -t " session_name " 2>/dev/null && tmux switch-client -t " session_name " || (tmux new-session -d -c \\\\\\\"" full_path "\\\\\\\" -s " session_name " && tmux switch-client -t " session_name ")\\\"\""
             }
         }
@@ -194,11 +207,11 @@ get_branch_data() {
                 gsub("/", "-", session_name)
 
                 if (is_remote) {
-                    # Remote branch: create tracking branch
-                    print "\"[remote] " display_branch "\" \"\" \"run-shell \\\"git worktree add -b " local_branch " " worktree_path " " branch " > /dev/null && tmux new-session -d -c \\\\\\\"" worktree_path "\\\\\\\" -s " session_name " && tmux switch-client -t " session_name "\\\"\""
+                    # Remote branch: create tracking branch (paths quoted for spaces)
+                    print "\"[remote] " display_branch "\" \"\" \"run-shell \\\"git worktree add -b " local_branch " \\\\\\\"" worktree_path "\\\\\\\" " branch " > /dev/null && tmux new-session -d -c \\\\\\\"" worktree_path "\\\\\\\" -s " session_name " && tmux switch-client -t " session_name "\\\"\""
                 } else {
-                    # Local branch
-                    print "\"" display_branch "\" \"\" \"run-shell \\\"git worktree add " worktree_path " " branch " > /dev/null && tmux new-session -d -c \\\\\\\"" worktree_path "\\\\\\\" -s " session_name " && tmux switch-client -t " session_name "\\\"\""
+                    # Local branch (paths quoted for spaces)
+                    print "\"" display_branch "\" \"\" \"run-shell \\\"git worktree add \\\\\\\"" worktree_path "\\\\\\\" " branch " > /dev/null && tmux new-session -d -c \\\\\\\"" worktree_path "\\\\\\\" -s " session_name " && tmux switch-client -t " session_name "\\\"\""
                 }
             }
         }
@@ -230,7 +243,9 @@ get_removable_worktree_data() {
         /^worktree/ {
             path = $2
             full_path = path
+            head_sha = ""
         }
+        /^HEAD/ { head_sha = substr($2,1,7) }
         /^branch/ {
             if (path != current_dir) {
                 branch = $2
@@ -256,6 +271,22 @@ get_removable_worktree_data() {
                 }
             }
         }
+        /^detached/ {
+            # Handle detached HEAD worktrees
+            if (path != current_dir) {
+                display_path = path
+                sub(home"/", "~/", display_path)
+                branch = "HEAD@" head_sha
+
+                # Apply filter (case-insensitive)
+                if (filter == "" || tolower(branch) ~ tolower(filter)) {
+                    session_name = project "-detached-" head_sha
+
+                    # Detached HEAD worktrees - only remove worktree (no branch to delete)
+                    print "\"" display_path " (" branch ")\" \"\" \"display-message \\\"Removing detached worktree...\\\" ; run-shell \\\". " script_path " && remove_worktree \\\\\\\"" full_path "\\\\\\\" \\\\\\\"\\\\\\\" false \\\\\\\"" session_name "\\\\\\\" " current_page "\\\"\""
+                }
+            }
+        }
     ' | sed -n "${start_line},${end_line}p" | tr '\n' ' '
 }
 
@@ -278,9 +309,14 @@ get_worktree_page_count() {
             }
         }
         /^worktree/ { path = $2 }
+        /^HEAD/ { head_sha = substr($2,1,7) }
         /^branch/ {
             branch = $2
             sub("refs/heads/", "", branch)
+            if (filter == "" || tolower(branch) ~ tolower(filter)) count++
+        }
+        /^detached/ {
+            branch = "HEAD@" head_sha
             if (filter == "" || tolower(branch) ~ tolower(filter)) count++
         }
         END { print count+0 }
@@ -340,10 +376,17 @@ get_removable_worktree_page_count() {
             }
         }
         /^worktree/ { path = $2 }
+        /^HEAD/ { head_sha = substr($2,1,7) }
         /^branch/ {
             if (path != current_dir) {
                 branch = $2
                 sub("refs/heads/", "", branch)
+                if (filter == "" || tolower(branch) ~ tolower(filter)) count++
+            }
+        }
+        /^detached/ {
+            if (path != current_dir) {
+                branch = "HEAD@" head_sha
                 if (filter == "" || tolower(branch) ~ tolower(filter)) count++
             }
         }
@@ -443,11 +486,21 @@ create_new_worktree() {
     local session_name="${project_name}-${branch//\//-}"
 
     # Ensure managed directory exists
-    mkdir -p "$MANAGED_DIR"
+    if ! mkdir -p "$MANAGED_DIR" 2>/dev/null; then
+        tmux display-message "Failed to create directory: $MANAGED_DIR (check permissions)"
+        return 1
+    fi
 
-    git worktree add "$MANAGED_DIR/$branch" -b "$branch" > /dev/null 2>&1 && \
-    tmux new-session -d -c "$MANAGED_DIR/$branch" -s "$session_name" && \
-    tmux switch-client -t "$session_name"
+    if git worktree add "$MANAGED_DIR/$branch" -b "$branch" > /dev/null 2>&1; then
+        if tmux new-session -d -c "$MANAGED_DIR/$branch" -s "$session_name" && \
+           tmux switch-client -t "$session_name"; then
+            tmux display-message "Created worktree and session: $session_name"
+        else
+            tmux display-message "Worktree created but session failed - try 'tmux new -s $session_name'"
+        fi
+    else
+        tmux display-message "Failed to create worktree - branch '$branch' may already exist"
+    fi
 }
 
 # Show add worktree menu with pagination, optional filter, and optional remote branches

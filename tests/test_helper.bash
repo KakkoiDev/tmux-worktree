@@ -46,7 +46,8 @@ tmux_get_option() {
 create_test_repo() {
     TEST_REPO_DIR=$(mktemp -d "${BATS_TMPDIR}/test-repo.XXXXXX")
     cd "$TEST_REPO_DIR" || return 1
-    git init -q
+    # Use consistent branch name regardless of system default
+    git init -q --initial-branch=master
     git config user.email "test@test.com"
     git config user.name "Test User"
 

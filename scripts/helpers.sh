@@ -111,10 +111,8 @@ load_config() {
 # SESSION NAME HELPERS
 # ==============================================================================
 
-# Get project name from git repository root directory
-get_project_name() {
-    basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-}
+# Note: get_project_name() is defined in worktree_manager.sh with sanitization
+# to prevent command injection. Do not duplicate here.
 
 # Generate session name from project and branch
 # Replaces / with - for valid tmux session names
