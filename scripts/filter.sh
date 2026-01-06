@@ -2,7 +2,8 @@
 # ==============================================================================
 # TMUX WORKTREES - Filter Functions
 # ==============================================================================
-# POSIX-compliant wildcard matching and input sanitization
+# Wildcard matching and input sanitization
+# Requires: bash 4.0+ (uses [[ ]] and case pattern matching)
 
 # Sanitize filter input to prevent shell injection
 # Allows: a-z A-Z 0-9 * ? - _ / space

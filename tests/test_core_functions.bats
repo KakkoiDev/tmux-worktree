@@ -168,6 +168,51 @@ teardown() {
     assert_contains "$output" "feature-two"
 }
 
+@test "get_branch_data handles branches with slashes" {
+    source "$SCRIPTS_DIR/worktree_manager.sh"
+
+    # Create branch with slash
+    git branch "feature/auth/login" 2>/dev/null || true
+
+    run get_branch_data 1
+    assert_success
+    assert_contains "$output" "feature/auth/login"
+
+    # Session name should have slashes replaced with dashes
+    assert_contains "$output" "-feature-auth-login"
+
+    # Cleanup
+    git branch -D "feature/auth/login" 2>/dev/null || true
+}
+
+@test "get_branch_data handles branches with dots" {
+    source "$SCRIPTS_DIR/worktree_manager.sh"
+
+    # Create branch with dots
+    git branch "release-1.2.3" 2>/dev/null || true
+
+    run get_branch_data 1
+    assert_success
+    assert_contains "$output" "release-1.2.3"
+
+    # Cleanup
+    git branch -D "release-1.2.3" 2>/dev/null || true
+}
+
+@test "get_branch_data handles branches with underscores and numbers" {
+    source "$SCRIPTS_DIR/worktree_manager.sh"
+
+    # Create branch with underscore and numbers
+    git branch "fix_issue_123" 2>/dev/null || true
+
+    run get_branch_data 1
+    assert_success
+    assert_contains "$output" "fix_issue_123"
+
+    # Cleanup
+    git branch -D "fix_issue_123" 2>/dev/null || true
+}
+
 @test "get_branch_data includes worktree creation command" {
     source "$SCRIPTS_DIR/worktree_manager.sh"
 

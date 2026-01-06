@@ -2,6 +2,7 @@
 # ==============================================================================
 # TMUX WORKTREES - Shared Helper Functions
 # ==============================================================================
+# Requires: bash 4.0+, tmux
 
 # Determine plugin directory (works when sourced or executed)
 if [ -n "$TMUX_WORKTREES_PLUGIN_DIR" ]; then
@@ -39,12 +40,39 @@ get_tmux_option() {
     fi
 }
 
+# Validate positive integer, return default if invalid
+# Usage: validate_positive_int "value" "default" "option_name"
+validate_positive_int() {
+    local value="$1"
+    local default="$2"
+    local option_name="$3"
+
+    # Check if value is a positive integer
+    if [[ "$value" =~ ^[1-9][0-9]*$ ]]; then
+        echo "$value"
+    else
+        # Show warning only if tmux is available
+        if command -v tmux >/dev/null 2>&1 && [ -n "$TMUX" ]; then
+            tmux display-message "Warning: Invalid $option_name '$value', using default $default" 2>/dev/null || true
+        fi
+        echo "$default"
+    fi
+}
+
 # Load all configuration variables
 load_config() {
     WORKTREE_BASE=$(get_tmux_option "@worktree-path" "$HOME/.tmux-worktrees/worktrees")
     MANAGED_DIR="$WORKTREE_BASE/__tmux_managed__"
-    ITEMS_PER_PAGE=$(get_tmux_option "@worktree-items-per-page" "15")
-    FETCH_TIMEOUT=$(get_tmux_option "@worktree-fetch-timeout" "30")
+
+    # Load and validate numeric options
+    local items_raw
+    items_raw=$(get_tmux_option "@worktree-items-per-page" "15")
+    ITEMS_PER_PAGE=$(validate_positive_int "$items_raw" "15" "@worktree-items-per-page")
+
+    local timeout_raw
+    timeout_raw=$(get_tmux_option "@worktree-fetch-timeout" "30")
+    FETCH_TIMEOUT=$(validate_positive_int "$timeout_raw" "30" "@worktree-fetch-timeout")
+
     KEYBINDING=$(get_tmux_option "@worktree-keybinding" "W")
 
     export WORKTREE_BASE MANAGED_DIR ITEMS_PER_PAGE FETCH_TIMEOUT KEYBINDING

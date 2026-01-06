@@ -3,15 +3,17 @@
 # TMUX WORKTREES - Core Worktree Manager
 # ==============================================================================
 # Migrated from standalone tmux_worktree.sh to TPM plugin architecture
+# Requires: bash 4.0+, git, tmux, timeout (coreutils)
 
-# Ensure PATH is set for git and other commands (POSIX-compliant)
+# Ensure PATH is set for git and other commands
 if [ -z "$PATH" ] || ! command -v git >/dev/null 2>&1; then
     export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin${PATH:+:$PATH}"
 fi
 
 # Ensure HOME is set
 if [ -z "$HOME" ]; then
-    export HOME=$(eval echo ~$USER)
+    HOME=$(eval echo ~"$USER")
+    export HOME
 fi
 
 # Determine script location and source helpers
@@ -96,11 +98,13 @@ remove_worktree() {
 get_worktree_data() {
     local page=${1:-1}
     local filter=${2:-}
-    local sanitized_filter=$(sanitize_filter "$filter")
+    local sanitized_filter
+    sanitized_filter=$(sanitize_filter "$filter")
     local start_line=$(( (page - 1) * ITEMS_PER_PAGE + 1 ))
     local end_line=$(( page * ITEMS_PER_PAGE ))
 
-    local project_name=$(get_project_name)
+    local project_name
+    project_name=$(get_project_name)
     git worktree list --porcelain | awk -v home="$HOME" -v project="$project_name" -v filter="$sanitized_filter" '
         BEGIN {
             # Convert wildcard to regex
@@ -132,11 +136,13 @@ get_branch_data() {
     local page=${1:-1}
     local filter=${2:-}
     local include_remotes=${3:-0}
-    local sanitized_filter=$(sanitize_filter "$filter")
+    local sanitized_filter
+    sanitized_filter=$(sanitize_filter "$filter")
     local start_line=$(( (page - 1) * ITEMS_PER_PAGE + 1 ))
     local end_line=$(( page * ITEMS_PER_PAGE ))
 
-    local project_name=$(get_project_name)
+    local project_name
+    project_name=$(get_project_name)
 
     # Get local branches
     local branch_cmd="git branch --format='%(refname:short)'"
@@ -192,11 +198,13 @@ get_branch_data() {
 get_removable_worktree_data() {
     local page=${1:-1}
     local filter=${2:-}
-    local sanitized_filter=$(sanitize_filter "$filter")
+    local sanitized_filter
+    sanitized_filter=$(sanitize_filter "$filter")
     local start_line=$(( (page - 1) * ITEMS_PER_PAGE + 1 ))
     local end_line=$(( page * ITEMS_PER_PAGE ))
 
-    local project_name=$(get_project_name)
+    local project_name
+    project_name=$(get_project_name)
     local script_path="$SCRIPT_DIR/worktree_manager.sh"
 
     git worktree list --porcelain | awk -v home="$HOME" -v current_dir="$(pwd)" -v script_path="$script_path" -v current_page="$page" -v project="$project_name" -v filter="$sanitized_filter" '
@@ -243,8 +251,10 @@ get_removable_worktree_data() {
 
 get_worktree_page_count() {
     local filter=${1:-}
-    local sanitized_filter=$(sanitize_filter "$filter")
-    local total=$(git worktree list --porcelain | awk -v filter="$sanitized_filter" '
+    local sanitized_filter
+    sanitized_filter=$(sanitize_filter "$filter")
+    local total
+    total=$(git worktree list --porcelain | awk -v filter="$sanitized_filter" '
         BEGIN {
             if (filter != "") {
                 gsub(/\*/, ".*", filter)
@@ -266,7 +276,8 @@ get_worktree_page_count() {
 get_branch_page_count() {
     local filter=${1:-}
     local include_remotes=${2:-0}
-    local sanitized_filter=$(sanitize_filter "$filter")
+    local sanitized_filter
+    sanitized_filter=$(sanitize_filter "$filter")
 
     # Build branch command based on include_remotes
     local branch_cmd="git branch --format='%(refname:short)'"
@@ -274,7 +285,8 @@ get_branch_page_count() {
         branch_cmd="{ git branch --format='%(refname:short)'; git branch -r --format='%(refname:short)' | grep -v 'HEAD'; }"
     fi
 
-    local total=$(eval "$branch_cmd" | awk -v filter="$sanitized_filter" '
+    local total
+    total=$(eval "$branch_cmd" | awk -v filter="$sanitized_filter" '
         BEGIN {
             if (filter != "") {
                 gsub(/\*/, ".*", filter)
@@ -299,8 +311,10 @@ get_branch_page_count() {
 
 get_removable_worktree_page_count() {
     local filter=${1:-}
-    local sanitized_filter=$(sanitize_filter "$filter")
-    local total=$(git worktree list --porcelain | awk -v current_dir="$(pwd)" -v filter="$sanitized_filter" '
+    local sanitized_filter
+    sanitized_filter=$(sanitize_filter "$filter")
+    local total
+    total=$(git worktree list --porcelain | awk -v current_dir="$(pwd)" -v filter="$sanitized_filter" '
         BEGIN {
             if (filter != "") {
                 gsub(/\*/, ".*", filter)
@@ -375,9 +389,12 @@ show_worktree_menu() {
     local page=${1:-1}
     local filter=${2:-}
     local script_path="$SCRIPT_DIR/worktree_manager.sh"
-    local total_pages=$(get_worktree_page_count "$filter")
-    local worktree_items=$(get_worktree_data "$page" "$filter")
-    local nav_options=$(generate_nav_options "$page" "$total_pages" "show_worktree_menu" "$filter")
+    local total_pages
+    total_pages=$(get_worktree_page_count "$filter")
+    local worktree_items
+    worktree_items=$(get_worktree_data "$page" "$filter")
+    local nav_options
+    nav_options=$(generate_nav_options "$page" "$total_pages" "show_worktree_menu" "$filter")
 
     # Build title with filter indicator
     local title="Worktrees (Page $page/$total_pages)"
@@ -404,7 +421,8 @@ show_worktree_menu() {
 # Create new worktree helper function
 create_new_worktree() {
     local branch="$1"
-    local project_name=$(get_project_name)
+    local project_name
+    project_name=$(get_project_name)
     local session_name="${project_name}-${branch//\//-}"
 
     # Ensure managed directory exists
@@ -421,9 +439,12 @@ show_add_worktree_menu() {
     local filter=${2:-}
     local include_remotes=${3:-0}
     local script_path="$SCRIPT_DIR/worktree_manager.sh"
-    local total_pages=$(get_branch_page_count "$filter" "$include_remotes")
-    local branch_items=$(get_branch_data "$page" "$filter" "$include_remotes")
-    local nav_options=$(generate_nav_options "$page" "$total_pages" "show_add_worktree_menu" "$filter")
+    local total_pages
+    total_pages=$(get_branch_page_count "$filter" "$include_remotes")
+    local branch_items
+    branch_items=$(get_branch_data "$page" "$filter" "$include_remotes")
+    local nav_options
+    nav_options=$(generate_nav_options "$page" "$total_pages" "show_add_worktree_menu" "$filter")
 
     # Build title with filter and remote indicator
     local title="Add Worktree (Page $page/$total_pages)"
@@ -454,9 +475,12 @@ show_remove_worktree_menu() {
     local page=${1:-1}
     local filter=${2:-}
     local script_path="$SCRIPT_DIR/worktree_manager.sh"
-    local total_pages=$(get_removable_worktree_page_count "$filter")
-    local worktree_items=$(get_removable_worktree_data "$page" "$filter")
-    local nav_options=$(generate_nav_options "$page" "$total_pages" "show_remove_worktree_menu" "$filter")
+    local total_pages
+    total_pages=$(get_removable_worktree_page_count "$filter")
+    local worktree_items
+    worktree_items=$(get_removable_worktree_data "$page" "$filter")
+    local nav_options
+    nav_options=$(generate_nav_options "$page" "$total_pages" "show_remove_worktree_menu" "$filter")
 
     # Build title with filter indicator
     local title="Remove Worktree (Page $page/$total_pages)"

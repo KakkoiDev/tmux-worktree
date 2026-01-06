@@ -115,6 +115,46 @@ teardown() {
 }
 
 # ==============================================================================
+# Config Validation Tests
+# ==============================================================================
+
+@test "invalid ITEMS_PER_PAGE falls back to default" {
+    source_script "$SCRIPTS_DIR/helpers.sh"
+
+    tmux_set_option "@worktree-items-per-page" "abc"
+
+    load_config
+    assert_equal "15" "$ITEMS_PER_PAGE"
+}
+
+@test "zero ITEMS_PER_PAGE falls back to default" {
+    source_script "$SCRIPTS_DIR/helpers.sh"
+
+    tmux_set_option "@worktree-items-per-page" "0"
+
+    load_config
+    assert_equal "15" "$ITEMS_PER_PAGE"
+}
+
+@test "negative ITEMS_PER_PAGE falls back to default" {
+    source_script "$SCRIPTS_DIR/helpers.sh"
+
+    tmux_set_option "@worktree-items-per-page" "-5"
+
+    load_config
+    assert_equal "15" "$ITEMS_PER_PAGE"
+}
+
+@test "invalid FETCH_TIMEOUT falls back to default" {
+    source_script "$SCRIPTS_DIR/helpers.sh"
+
+    tmux_set_option "@worktree-fetch-timeout" "not-a-number"
+
+    load_config
+    assert_equal "30" "$FETCH_TIMEOUT"
+}
+
+# ==============================================================================
 # Plugin Environment Tests
 # ==============================================================================
 
