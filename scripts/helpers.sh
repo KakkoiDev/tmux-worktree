@@ -90,7 +90,7 @@ validate_positive_int() {
 
 # Load all configuration variables
 load_config() {
-    WORKTREE_BASE=$(get_tmux_option "@worktree-path" "$HOME/.tmux-worktrees/worktrees")
+    WORKTREE_BASE=$(get_tmux_option "@worktree-path" "$HOME/.tmux-worktree")
     MANAGED_DIR="$WORKTREE_BASE/__tmux_managed__"
 
     # Load and validate numeric options

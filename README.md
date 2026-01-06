@@ -75,7 +75,7 @@ Add to your `~/.tmux.conf`:
 # Custom keybinding (default: W)
 set -g @worktree-keybinding "T"
 
-# Custom worktree base path (default: ~/.tmux-worktrees/worktrees)
+# Custom worktree base path (default: ~/.tmux-worktree)
 set -g @worktree-path "~/my-worktrees"
 
 # Items per page (default: 15)

@@ -57,14 +57,14 @@ teardown() {
     assert_equal "custom-value" "$output"
 }
 
-@test "default WORKTREE_BASE is ~/.tmux-worktrees/worktrees" {
+@test "default WORKTREE_BASE is ~/.tmux-worktree" {
     source_script "$SCRIPTS_DIR/helpers.sh"
 
     # Ensure option is not set
     tmux_run set-option -gu "@worktree-path" 2>/dev/null || true
 
     load_config
-    assert_equal "$HOME/.tmux-worktrees/worktrees" "$WORKTREE_BASE"
+    assert_equal "$HOME/.tmux-worktree" "$WORKTREE_BASE"
 }
 
 @test "WORKTREE_BASE can be overridden via @worktree-path" {
