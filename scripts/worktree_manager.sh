@@ -27,6 +27,27 @@ source "$SCRIPT_DIR/filter.sh"
 load_config
 
 # ==============================================================================
+# REMOTE BRANCH FETCHING
+# ==============================================================================
+
+# Fetch remote branches with timeout protection
+fetch_remote_branches() {
+    local timeout_seconds=${FETCH_TIMEOUT:-30}
+
+    # Display fetching message
+    tmux display-message "Fetching remote branches..."
+
+    # Run git fetch with timeout
+    if timeout "$timeout_seconds" git fetch --all --prune 2>/dev/null; then
+        tmux display-message "Remote branches fetched successfully"
+        return 0
+    else
+        tmux display-message "Warning: Fetch timed out or failed (${timeout_seconds}s)"
+        return 1
+    fi
+}
+
+# ==============================================================================
 # CORE DATA FUNCTIONS
 # ==============================================================================
 
@@ -106,16 +127,26 @@ get_worktree_data() {
     ' | sed -n "${start_line},${end_line}p" | tr '\n' ' '
 }
 
-# Get git branch data with pagination and optional filter
+# Get git branch data with pagination, optional filter, and optional remote branches
 get_branch_data() {
     local page=${1:-1}
     local filter=${2:-}
+    local include_remotes=${3:-0}
     local sanitized_filter=$(sanitize_filter "$filter")
     local start_line=$(( (page - 1) * ITEMS_PER_PAGE + 1 ))
     local end_line=$(( page * ITEMS_PER_PAGE ))
 
     local project_name=$(get_project_name)
-    git branch --format="%(refname:short)" | awk -v base="$WORKTREE_BASE" -v project="$project_name" -v filter="$sanitized_filter" '
+
+    # Get local branches
+    local branch_cmd="git branch --format='%(refname:short)'"
+
+    # Add remote branches if requested
+    if [ "$include_remotes" = "1" ]; then
+        branch_cmd="{ git branch --format='%(refname:short)'; git branch -r --format='%(refname:short)' | grep -v 'HEAD'; }"
+    fi
+
+    eval "$branch_cmd" | awk -v base="$WORKTREE_BASE" -v project="$project_name" -v filter="$sanitized_filter" '
         BEGIN {
             if (filter != "") {
                 gsub(/\*/, ".*", filter)
@@ -125,12 +156,33 @@ get_branch_data() {
         }
         {
             branch = $0
-            # Apply filter (case-insensitive)
-            if (filter == "" || tolower(branch) ~ tolower(filter)) {
-                worktree_path = base "/" branch
-                session_name = project "-" branch
+            # Determine if this is a remote branch
+            is_remote = (index(branch, "/") > 0 && index(branch, "origin/") == 1)
+
+            # For display and matching, use the branch name
+            display_branch = branch
+            local_branch = branch
+
+            # For remote branches, extract local name for worktree creation
+            if (is_remote) {
+                # Strip remote prefix for local branch name (origin/feat -> feat)
+                local_branch = substr(branch, index(branch, "/") + 1)
+            }
+
+            # Apply filter (case-insensitive) - match against the branch name portion
+            match_name = is_remote ? local_branch : branch
+            if (filter == "" || tolower(match_name) ~ tolower(filter)) {
+                worktree_path = base "/" local_branch
+                session_name = project "-" local_branch
                 gsub("/", "-", session_name)
-                print "\"" branch "\" \"\" \"run-shell \\\"git worktree add " worktree_path " " branch " > /dev/null && tmux new-session -d -c \\\\\\\"" worktree_path "\\\\\\\" -s " session_name " && tmux switch-client -t " session_name "\\\"\""
+
+                if (is_remote) {
+                    # Remote branch: create tracking branch
+                    print "\"[remote] " display_branch "\" \"\" \"run-shell \\\"git worktree add -b " local_branch " " worktree_path " " branch " > /dev/null && tmux new-session -d -c \\\\\\\"" worktree_path "\\\\\\\" -s " session_name " && tmux switch-client -t " session_name "\\\"\""
+                } else {
+                    # Local branch
+                    print "\"" display_branch "\" \"\" \"run-shell \\\"git worktree add " worktree_path " " branch " > /dev/null && tmux new-session -d -c \\\\\\\"" worktree_path "\\\\\\\" -s " session_name " && tmux switch-client -t " session_name "\\\"\""
+                }
             }
         }
     ' | sed -n "${start_line},${end_line}p" | tr '\n' ' '
@@ -213,8 +265,16 @@ get_worktree_page_count() {
 
 get_branch_page_count() {
     local filter=${1:-}
+    local include_remotes=${2:-0}
     local sanitized_filter=$(sanitize_filter "$filter")
-    local total=$(git branch --format="%(refname:short)" | awk -v filter="$sanitized_filter" '
+
+    # Build branch command based on include_remotes
+    local branch_cmd="git branch --format='%(refname:short)'"
+    if [ "$include_remotes" = "1" ]; then
+        branch_cmd="{ git branch --format='%(refname:short)'; git branch -r --format='%(refname:short)' | grep -v 'HEAD'; }"
+    fi
+
+    local total=$(eval "$branch_cmd" | awk -v filter="$sanitized_filter" '
         BEGIN {
             if (filter != "") {
                 gsub(/\*/, ".*", filter)
@@ -223,7 +283,14 @@ get_branch_page_count() {
             }
         }
         {
-            if (filter == "" || tolower($0) ~ tolower(filter)) count++
+            branch = $0
+            # For remote branches, match against local part
+            if (index(branch, "origin/") == 1) {
+                match_name = substr(branch, index(branch, "/") + 1)
+            } else {
+                match_name = branch
+            }
+            if (filter == "" || tolower(match_name) ~ tolower(filter)) count++
         }
         END { print count+0 }
     ')
@@ -348,32 +415,37 @@ create_new_worktree() {
     tmux switch-client -t "$session_name"
 }
 
-# Show add worktree menu with pagination and optional filter
+# Show add worktree menu with pagination, optional filter, and optional remote branches
 show_add_worktree_menu() {
     local page=${1:-1}
     local filter=${2:-}
+    local include_remotes=${3:-0}
     local script_path="$SCRIPT_DIR/worktree_manager.sh"
-    local total_pages=$(get_branch_page_count "$filter")
-    local branch_items=$(get_branch_data "$page" "$filter")
+    local total_pages=$(get_branch_page_count "$filter" "$include_remotes")
+    local branch_items=$(get_branch_data "$page" "$filter" "$include_remotes")
     local nav_options=$(generate_nav_options "$page" "$total_pages" "show_add_worktree_menu" "$filter")
 
-    # Build title with filter indicator
+    # Build title with filter and remote indicator
     local title="Add Worktree (Page $page/$total_pages)"
+    [ "$include_remotes" = "1" ] && title="$title [+remote]"
     [ -n "$filter" ] && title="$title - Filter: '$filter'"
 
     # New branch option
     local new_option="\"New\" \"n\" \"command-prompt -p 'New branch name:' 'run-shell \\\". $script_path && create_new_worktree %1'\"\""
 
+    # Fetch remote option - fetches and refreshes menu with remotes included
+    local fetch_option="\"Fetch remote\" \"r\" \"run-shell \\\". '$script_path' && fetch_remote_branches && show_add_worktree_menu 1 '$filter' 1\\\"\""
+
     # Filter option (always present)
-    local filter_option="\"Filter\" \"f\" \"command-prompt -p 'Filter pattern:' 'run-shell \\\". $script_path && show_add_worktree_menu 1 %1\\\"'\""
+    local filter_option="\"Filter\" \"f\" \"command-prompt -p 'Filter pattern:' 'run-shell \\\". $script_path && show_add_worktree_menu 1 %1 $include_remotes\\\"'\""
 
     # Clear filter option (only when filter active)
     local clear_option=""
     if [ -n "$filter" ]; then
-        clear_option="\"Clear filter\" \"c\" \"run-shell \\\". '$script_path' && show_add_worktree_menu 1\\\"\""
+        clear_option="\"Clear filter\" \"c\" \"run-shell \\\". '$script_path' && show_add_worktree_menu 1 '' $include_remotes\\\"\""
     fi
 
-    local all_options="$new_option $filter_option $clear_option $branch_items $nav_options"
+    local all_options="$new_option $fetch_option $filter_option $clear_option $branch_items $nav_options"
     display_menu "$title" "$all_options"
 }
 
@@ -432,10 +504,11 @@ main() {
     case "${1:-tmux_worktrees_main}" in
         "tmux_worktrees_main"|"") tmux_worktrees_main ;;
         "show_worktree_menu") show_worktree_menu "$2" "$3" ;;
-        "show_add_worktree_menu") show_add_worktree_menu "$2" "$3" ;;
+        "show_add_worktree_menu") show_add_worktree_menu "$2" "$3" "$4" ;;
         "show_remove_worktree_menu") show_remove_worktree_menu "$2" "$3" ;;
         "remove_worktree") remove_worktree "$2" "$3" "$4" "$5" "$6" ;;
         "create_new_worktree") create_new_worktree "$2" ;;
+        "fetch_remote_branches") fetch_remote_branches ;;
         *) echo "Unknown command: $1" ;;
     esac
 }
