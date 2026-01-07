@@ -223,3 +223,83 @@ teardown() {
     assert_contains "$output" "Health Check"
     assert_contains "$output" "Plugin version"
 }
+
+# ==============================================================================
+# Menu Command Syntax Validation Tests (eval quoting)
+# ==============================================================================
+
+# Helper to validate menu command syntax without running tmux
+validate_menu_eval() {
+    local options="$1"
+    # Mock tmux to just echo args - validates eval parsing works
+    tmux() { echo "TMUX_CALLED: $*"; }
+    export -f tmux
+    eval "tmux display-menu -T 'Test' $options" 2>&1
+}
+
+@test "show_worktree_menu generates valid eval syntax" {
+    source_script "$SCRIPTS_DIR/worktree_manager.sh"
+
+    # Capture the options string
+    local captured_options=""
+    display_menu() { captured_options="$2"; }
+
+    show_worktree_menu 1 ""
+
+    # Validate eval doesn't fail
+    run validate_menu_eval "$captured_options"
+    assert_success
+    assert_contains "$output" "TMUX_CALLED"
+}
+
+@test "show_add_worktree_menu generates valid eval syntax" {
+    source_script "$SCRIPTS_DIR/worktree_manager.sh"
+
+    local captured_options=""
+    display_menu() { captured_options="$2"; }
+
+    show_add_worktree_menu 1 ""
+
+    run validate_menu_eval "$captured_options"
+    assert_success
+    assert_contains "$output" "TMUX_CALLED"
+}
+
+@test "show_add_worktree_menu with filter generates valid eval syntax" {
+    source_script "$SCRIPTS_DIR/worktree_manager.sh"
+
+    local captured_options=""
+    display_menu() { captured_options="$2"; }
+
+    show_add_worktree_menu 1 "feature*"
+
+    run validate_menu_eval "$captured_options"
+    assert_success
+    assert_contains "$output" "TMUX_CALLED"
+}
+
+@test "show_remove_worktree_menu generates valid eval syntax" {
+    source_script "$SCRIPTS_DIR/worktree_manager.sh"
+
+    local captured_options=""
+    display_menu() { captured_options="$2"; }
+
+    show_remove_worktree_menu 1 ""
+
+    run validate_menu_eval "$captured_options"
+    assert_success
+    assert_contains "$output" "TMUX_CALLED"
+}
+
+@test "tmux_worktrees_main generates valid eval syntax" {
+    source_script "$SCRIPTS_DIR/worktree_manager.sh"
+
+    local captured_options=""
+    display_menu() { captured_options="$2"; }
+
+    tmux_worktrees_main
+
+    run validate_menu_eval "$captured_options"
+    assert_success
+    assert_contains "$output" "TMUX_CALLED"
+}

@@ -539,7 +539,7 @@ show_add_worktree_menu() {
     [ -n "$filter" ] && title="$title - Filter: '$filter'"
 
     # New branch option
-    local new_option="\"New\" \"n\" \"command-prompt -p 'New branch name:' 'run-shell \\\". $script_path && create_new_worktree %1'\"\""
+    local new_option="\"New\" \"n\" \"command-prompt -p 'New branch name:' 'run-shell \\\". $script_path && create_new_worktree %1\\\"'\""
 
     # Fetch remote option - fetches and refreshes menu with remotes included
     local fetch_option="\"Fetch remote\" \"r\" \"run-shell \\\". '$script_path' && fetch_remote_branches && show_add_worktree_menu 1 '$filter' 1\\\"\""
