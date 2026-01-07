@@ -55,11 +55,11 @@ Press `prefix + W` (default) to open the main menu.
 
 ### Navigation
 
-- `n` / `p` - Next / Previous page
+- `i` / `o` - Next / Previous page
 - `f` - Filter by pattern
 - `c` - Clear filter
-- `b` - Back to previous menu
-- `o` - Fetch remote branches (in Add Worktree menu)
+- `Backspace` - Back to previous menu
+- `r` - Fetch remote branches (in Add Worktree menu)
 
 ### Filter Patterns
 
