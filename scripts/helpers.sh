@@ -94,9 +94,37 @@ validate_positive_int() {
     fi
 }
 
+# Validate page number - must be positive integer, defaults to 1
+# Usage: validate_page "value"
+validate_page() {
+    local value="$1"
+    # Check if value is a positive integer
+    if [[ "$value" =~ ^[1-9][0-9]*$ ]]; then
+        echo "$value"
+    else
+        echo "1"
+    fi
+}
+
+# Limit filter length to prevent DoS (max 256 chars)
+# Usage: limit_filter "filter_string"
+limit_filter() {
+    local filter="$1"
+    local max_length=256
+    if [ ${#filter} -gt $max_length ]; then
+        echo "${filter:0:$max_length}"
+    else
+        echo "$filter"
+    fi
+}
+
 # Load all configuration variables
 load_config() {
     WORKTREE_BASE=$(get_tmux_option "@worktree-path" "$HOME/.tmux-worktree")
+    # Validate WORKTREE_BASE is not empty
+    if [ -z "$WORKTREE_BASE" ]; then
+        WORKTREE_BASE="$HOME/.tmux-worktree"
+    fi
     MANAGED_DIR="$WORKTREE_BASE/__tmux_worktree_managed__"
     # Legacy managed dir for backward compatibility with standalone script
     LEGACY_MANAGED_DIR="$WORKTREE_BASE/__tmux_managed__"

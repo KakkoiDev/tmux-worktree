@@ -71,11 +71,11 @@ remove_worktree() {
     local current_page="$5"
 
     # Remove the worktree with timeout protection
+    # Note: No retry without timeout to prevent infinite hang
     if run_with_timeout 10 git worktree remove --force "$worktree_path" > /dev/null 2>&1; then
         tmux display-message "Worktree removed: $worktree_path"
     else
         tmux display-message "Worktree removal failed - try 'git worktree remove $worktree_path' manually"
-        git worktree remove --force "$worktree_path" > /dev/null 2>&1 || true
     fi
 
     # If it's a managed worktree, also delete the branch with timeout
@@ -100,8 +100,10 @@ remove_worktree() {
 
 # Get git worktree data with pagination and optional filter
 get_worktree_data() {
-    local page=${1:-1}
-    local filter=${2:-}
+    local page
+    page=$(validate_page "${1:-1}")
+    local filter
+    filter=$(limit_filter "${2:-}")
     local sanitized_filter
     sanitized_filter=$(sanitize_filter "$filter")
     local start_line=$(( (page - 1) * ITEMS_PER_PAGE + 1 ))
@@ -126,7 +128,8 @@ get_worktree_data() {
             display_path=path
             sub(home"/", "~/", display_path)
             sub("refs/heads/", "", branch)
-            # Sanitize branch name - remove shell metacharacters
+            # Sanitize branch name - remove newlines and shell metacharacters
+            gsub(/[\r\n]/, "", branch)
             gsub(/[^a-zA-Z0-9._\/-]/, "", branch)
 
             # Apply filter (case-insensitive)
@@ -153,8 +156,10 @@ get_worktree_data() {
 
 # Get git branch data with pagination, optional filter, and optional remote branches
 get_branch_data() {
-    local page=${1:-1}
-    local filter=${2:-}
+    local page
+    page=$(validate_page "${1:-1}")
+    local filter
+    filter=$(limit_filter "${2:-}")
     local include_remotes=${3:-0}
     local sanitized_filter
     sanitized_filter=$(sanitize_filter "$filter")
@@ -183,7 +188,8 @@ get_branch_data() {
         }
         {
             branch = $0
-            # Sanitize branch name - remove shell metacharacters
+            # Sanitize branch name - remove newlines and shell metacharacters
+            gsub(/[\r\n]/, "", branch)
             gsub(/[^a-zA-Z0-9._\/-]/, "", branch)
 
             # Determine if this is a remote branch
@@ -220,8 +226,10 @@ get_branch_data() {
 
 # Get removable worktree data with pagination and optional filter
 get_removable_worktree_data() {
-    local page=${1:-1}
-    local filter=${2:-}
+    local page
+    page=$(validate_page "${1:-1}")
+    local filter
+    filter=$(limit_filter "${2:-}")
     local sanitized_filter
     sanitized_filter=$(sanitize_filter "$filter")
     local start_line=$(( (page - 1) * ITEMS_PER_PAGE + 1 ))
@@ -447,11 +455,15 @@ display_menu() {
 
 # Show worktree list menu with pagination and optional filter
 show_worktree_menu() {
-    local page=${1:-1}
-    local filter=${2:-}
+    local page
+    page=$(validate_page "${1:-1}")
+    local filter
+    filter=$(limit_filter "${2:-}")
     local script_path="$SCRIPT_DIR/worktree_manager.sh"
     local total_pages
     total_pages=$(get_worktree_page_count "$filter")
+    # Ensure at least 1 page to avoid "Page 1/0"
+    [ "$total_pages" -lt 1 ] && total_pages=1
     local worktree_items
     worktree_items=$(get_worktree_data "$page" "$filter")
     local nav_options
@@ -506,12 +518,16 @@ create_new_worktree() {
 
 # Show add worktree menu with pagination, optional filter, and optional remote branches
 show_add_worktree_menu() {
-    local page=${1:-1}
-    local filter=${2:-}
+    local page
+    page=$(validate_page "${1:-1}")
+    local filter
+    filter=$(limit_filter "${2:-}")
     local include_remotes=${3:-0}
     local script_path="$SCRIPT_DIR/worktree_manager.sh"
     local total_pages
     total_pages=$(get_branch_page_count "$filter" "$include_remotes")
+    # Ensure at least 1 page to avoid "Page 1/0"
+    [ "$total_pages" -lt 1 ] && total_pages=1
     local branch_items
     branch_items=$(get_branch_data "$page" "$filter" "$include_remotes")
     local nav_options
@@ -543,11 +559,15 @@ show_add_worktree_menu() {
 
 # Show remove worktree menu with pagination and optional filter
 show_remove_worktree_menu() {
-    local page=${1:-1}
-    local filter=${2:-}
+    local page
+    page=$(validate_page "${1:-1}")
+    local filter
+    filter=$(limit_filter "${2:-}")
     local script_path="$SCRIPT_DIR/worktree_manager.sh"
     local total_pages
     total_pages=$(get_removable_worktree_page_count "$filter")
+    # Ensure at least 1 page to avoid "Page 1/0"
+    [ "$total_pages" -lt 1 ] && total_pages=1
     local worktree_items
     worktree_items=$(get_removable_worktree_data "$page" "$filter")
     local nav_options
