@@ -26,7 +26,7 @@ A tmux plugin for managing git worktrees with an interactive menu interface.
 Add to your `~/.tmux.conf`:
 
 ```bash
-set -g @plugin 'yourusername/tmux-worktree'
+set -g @plugin 'KakkoiDev/tmux-worktree'
 ```
 
 Then press `prefix + I` to install.
@@ -34,7 +34,7 @@ Then press `prefix + I` to install.
 ### Manual Installation
 
 ```bash
-git clone https://github.com/yourusername/tmux-worktree ~/.tmux/plugins/tmux-worktree
+git clone https://github.com/KakkoiDev/tmux-worktree ~/.tmux/plugins/tmux-worktree
 ```
 
 Add to your `~/.tmux.conf`:
@@ -49,17 +49,20 @@ Press `prefix + W` (default) to open the main menu.
 
 ### Main Menu
 
-- **Switch Worktrees** - Switch to an existing worktree
-- **Add Worktree** - Create a new worktree from a branch
-- **Remove Worktree** - Remove an existing worktree
+- **List** (`l`) - Switch to an existing worktree
+- **Add** (`a`) - Create a new worktree from a branch
+- **Remove** (`d`) - Remove an existing worktree
+- **Help** (`h`) - Show keybindings help
 
-### Navigation
+### Navigation (customizable)
 
 - `i` / `o` - Next / Previous page
 - `f` - Filter by pattern
 - `c` - Clear filter
 - `Backspace` - Back to previous menu
-- `r` - Fetch remote branches (in Add Worktree menu)
+- `n` - Create new branch (in Add menu)
+- `r` - Fetch remote branches (in Add menu)
+- `q` - Quit
 
 ### Filter Patterns
 
@@ -83,6 +86,28 @@ set -g @worktree-items-per-page "20"
 
 # Fetch timeout in seconds (default: 30)
 set -g @worktree-fetch-timeout "60"
+
+# Show/hide help menu (default: on)
+set -g @worktree-help-menu "off"
+```
+
+### Custom Keybindings
+
+All navigation keys can be customized:
+
+```bash
+# Navigation keys
+set -g @worktree-key-next "j"        # Next page (default: i)
+set -g @worktree-key-prev "k"        # Previous page (default: o)
+set -g @worktree-key-back "Escape"   # Back (default: BSpace)
+set -g @worktree-key-quit "q"        # Quit (default: q)
+
+# Action keys
+set -g @worktree-key-filter "/"      # Filter (default: f)
+set -g @worktree-key-clear-filter "x" # Clear filter (default: c)
+set -g @worktree-key-new "n"         # New branch (default: n)
+set -g @worktree-key-fetch "r"       # Fetch remote (default: r)
+set -g @worktree-key-help "?"        # Help menu (default: h)
 ```
 
 ## How It Works
