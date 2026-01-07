@@ -430,23 +430,30 @@ generate_nav_options() {
     local total_pages=$2
     local menu_function=$3
     local filter=${4:-}
+    local extra_args=${5:-}
     local script_path="$SCRIPT_DIR/worktree_manager.sh"
 
     local nav_options=""
 
-    # Previous page navigation (preserve filter)
+    # Build args string (filter + extra_args)
+    local args_suffix=""
+    if [ -n "$filter" ] || [ -n "$extra_args" ]; then
+        args_suffix="'$filter' $extra_args"
+    fi
+
+    # Previous page navigation (preserve filter and extra args)
     if [ "$page" -gt 1 ]; then
-        if [ -n "$filter" ]; then
-            nav_options="\"◀ Previous\" \"o\" \"run-shell \\\". '$script_path' && $menu_function $((page - 1)) '$filter'\\\"\" "
+        if [ -n "$args_suffix" ]; then
+            nav_options="\"◀ Previous\" \"o\" \"run-shell \\\". '$script_path' && $menu_function $((page - 1)) $args_suffix\\\"\" "
         else
             nav_options="\"◀ Previous\" \"o\" \"run-shell \\\". '$script_path' && $menu_function $((page - 1))\\\"\" "
         fi
     fi
 
-    # Next page navigation (preserve filter)
+    # Next page navigation (preserve filter and extra args)
     if [ "$page" -lt "$total_pages" ]; then
-        if [ -n "$filter" ]; then
-            nav_options="${nav_options}\"Next ▶\" \"i\" \"run-shell \\\". '$script_path' && $menu_function $((page + 1)) '$filter'\\\"\" "
+        if [ -n "$args_suffix" ]; then
+            nav_options="${nav_options}\"Next ▶\" \"i\" \"run-shell \\\". '$script_path' && $menu_function $((page + 1)) $args_suffix\\\"\" "
         else
             nav_options="${nav_options}\"Next ▶\" \"i\" \"run-shell \\\". '$script_path' && $menu_function $((page + 1))\\\"\" "
         fi
@@ -547,7 +554,7 @@ show_add_worktree_menu() {
     local branch_items
     branch_items=$(get_branch_data "$page" "$filter" "$include_remotes")
     local nav_options
-    nav_options=$(generate_nav_options "$page" "$total_pages" "show_add_worktree_menu" "$filter")
+    nav_options=$(generate_nav_options "$page" "$total_pages" "show_add_worktree_menu" "$filter" "$include_remotes")
 
     # Build title with filter and remote indicator
     local title="Add Worktree (Page $page/$total_pages)"
