@@ -35,16 +35,32 @@ load_config
 # Fetch remote branches with timeout protection
 fetch_remote_branches() {
     local timeout_seconds=${FETCH_TIMEOUT:-30}
+    local error_file
+    error_file=$(mktemp 2>/dev/null || echo "/tmp/tmux-worktree-fetch-$$")
 
     # Display fetching message
     tmux display-message "Fetching remote branches..."
+    debug_log "Starting git fetch in $(pwd) with timeout ${timeout_seconds}s"
 
-    # Run git fetch with timeout (uses portable timeout wrapper)
-    if run_with_timeout "$timeout_seconds" git fetch --all --prune 2>/dev/null; then
+    # Run git fetch with timeout, capture stderr
+    if run_with_timeout "$timeout_seconds" git fetch --all --prune 2>"$error_file"; then
+        debug_log "Fetch completed successfully"
         tmux display-message "Remote branches fetched successfully"
+        rm -f "$error_file"
         return 0
     else
-        tmux display-message "Fetch failed - try 'git fetch origin' manually or check network"
+        local exit_code=$?
+        local error_msg
+        error_msg=$(head -1 "$error_file" 2>/dev/null | cut -c1-80)
+        debug_log "Fetch failed (exit $exit_code): $(cat "$error_file" 2>/dev/null)"
+
+        # Show first line of error (truncated) or generic message
+        if [ -n "$error_msg" ]; then
+            tmux display-message "Fetch failed: $error_msg"
+        else
+            tmux display-message "Fetch failed (exit $exit_code) - check debug log or run 'git fetch' manually"
+        fi
+        rm -f "$error_file"
         return 1
     fi
 }
