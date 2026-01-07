@@ -126,6 +126,54 @@ Check if the branch already exists:
 git branch -a | grep branch-name
 ```
 
+### Plugin not loading
+
+Check if the plugin is active:
+```bash
+# Run health check
+~/.tmux/plugins/tmux-worktree/scripts/worktree_manager.sh health_check
+```
+
+### Keybinding doesn't work
+
+The default `prefix + W` may conflict with other plugins. Change it:
+```bash
+set -g @worktree-keybinding "T"
+```
+
+## Uninstall
+
+### With TPM
+
+1. Remove the plugin line from `~/.tmux.conf`
+2. Press `prefix + alt + u` to uninstall
+
+### Manual cleanup
+
+```bash
+# Remove keybinding (replace W with your keybinding)
+tmux unbind-key W
+
+# Remove tmux options
+tmux set-option -gu @worktree-path
+tmux set-option -gu @worktree-items-per-page
+tmux set-option -gu @worktree-fetch-timeout
+tmux set-option -gu @worktree-keybinding
+
+# Optionally remove worktree directory (WARNING: deletes all managed worktrees)
+# rm -rf ~/.tmux-worktree
+```
+
+## Debug Mode
+
+Enable debug logging to troubleshoot issues:
+
+```bash
+set -g @worktree-debug "on"
+```
+
+Logs are written to `~/.tmux-worktree/.tmux-worktree.log`.
+
 ## License
 
 MIT

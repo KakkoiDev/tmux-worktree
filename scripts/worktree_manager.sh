@@ -109,7 +109,7 @@ get_worktree_data() {
 
     local project_name
     project_name=$(get_project_name)
-    git worktree list --porcelain | awk -v home="$HOME" -v project="$project_name" -v filter="$sanitized_filter" '
+    LC_ALL=C git worktree list --porcelain | LC_ALL=C awk -v home="$HOME" -v project="$project_name" -v filter="$sanitized_filter" '
         BEGIN {
             # Convert wildcard to regex
             if (filter != "") {
@@ -231,7 +231,7 @@ get_removable_worktree_data() {
     project_name=$(get_project_name)
     local script_path="$SCRIPT_DIR/worktree_manager.sh"
 
-    git worktree list --porcelain | awk -v home="$HOME" -v current_dir="$(pwd)" -v script_path="$script_path" -v current_page="$page" -v project="$project_name" -v filter="$sanitized_filter" '
+    LC_ALL=C git worktree list --porcelain | LC_ALL=C awk -v home="$HOME" -v current_dir="$(pwd)" -v script_path="$script_path" -v current_page="$page" -v project="$project_name" -v filter="$sanitized_filter" '
         BEGIN {
             if (filter != "") {
                 gsub(/\./, "\\.", filter)  # Escape literal dots first
@@ -261,7 +261,8 @@ get_removable_worktree_data() {
                     gsub("/", "-", session_name)
 
                     # Check if worktree is in managed directory to decide whether to delete branch
-                    if (path ~ /__tmux_worktree_managed__/) {
+                    # Supports both current and legacy managed directory names
+                    if (path ~ /__tmux_worktree_managed__/ || path ~ /__tmux_managed__/) {
                         # Managed worktree - remove both worktree and branch
                         print "\"" display_path " (" branch ")\" \"\" \"display-message \\\"Removing managed worktree and branch...\\\" ; run-shell \\\". " script_path " && remove_worktree \\\\\\\"" full_path "\\\\\\\" \\\\\\\"" branch "\\\\\\\" true \\\\\\\"" session_name "\\\\\\\" " current_page "\\\"\""
                     } else {
@@ -299,7 +300,7 @@ get_worktree_page_count() {
     local sanitized_filter
     sanitized_filter=$(sanitize_filter "$filter")
     local total
-    total=$(git worktree list --porcelain | awk -v filter="$sanitized_filter" '
+    total=$(LC_ALL=C git worktree list --porcelain | LC_ALL=C awk -v filter="$sanitized_filter" '
         BEGIN {
             if (filter != "") {
                 gsub(/\./, "\\.", filter)  # Escape literal dots first
@@ -366,7 +367,7 @@ get_removable_worktree_page_count() {
     local sanitized_filter
     sanitized_filter=$(sanitize_filter "$filter")
     local total
-    total=$(git worktree list --porcelain | awk -v current_dir="$(pwd)" -v filter="$sanitized_filter" '
+    total=$(LC_ALL=C git worktree list --porcelain | LC_ALL=C awk -v current_dir="$(pwd)" -v filter="$sanitized_filter" '
         BEGIN {
             if (filter != "") {
                 gsub(/\./, "\\.", filter)  # Escape literal dots first
@@ -590,6 +591,35 @@ tmux_worktrees_main() {
 }
 
 # ==============================================================================
+# DIAGNOSTIC COMMANDS
+# ==============================================================================
+
+# Display version information
+show_version() {
+    echo "tmux-worktree version $TMUX_WORKTREE_VERSION"
+}
+
+# Health check for troubleshooting
+health_check() {
+    echo "tmux-worktree Health Check"
+    echo "=========================="
+    echo "Plugin version: $TMUX_WORKTREE_VERSION"
+    echo "tmux version: $(tmux -V 2>/dev/null || echo 'not found')"
+    echo "Worktree base: $WORKTREE_BASE"
+    echo "Managed dir: $MANAGED_DIR"
+    echo "Managed dir exists: $([ -d "$MANAGED_DIR" ] && echo 'yes' || echo 'no')"
+    echo "Legacy managed dir: $LEGACY_MANAGED_DIR"
+    echo "Legacy dir exists: $([ -d "$LEGACY_MANAGED_DIR" ] && echo 'yes' || echo 'no')"
+    echo "Git available: $(command -v git >/dev/null && echo 'yes' || echo 'no')"
+    echo "Timeout available: $(command -v timeout >/dev/null || command -v gtimeout >/dev/null && echo 'yes' || echo 'no (fetch may hang)')"
+    echo "Debug mode: $DEBUG"
+    echo "In git repo: $(git rev-parse --show-toplevel 2>/dev/null && echo 'yes' || echo 'no')"
+    if git rev-parse --show-toplevel >/dev/null 2>&1; then
+        echo "Worktrees found: $(git worktree list 2>/dev/null | wc -l | tr -d ' ')"
+    fi
+}
+
+# ==============================================================================
 # SCRIPT EXECUTION
 # ==============================================================================
 
@@ -603,6 +633,8 @@ main() {
         "remove_worktree") remove_worktree "$2" "$3" "$4" "$5" "$6" ;;
         "create_new_worktree") create_new_worktree "$2" ;;
         "fetch_remote_branches") fetch_remote_branches ;;
+        "version") show_version ;;
+        "health_check") health_check ;;
         *) echo "Unknown command: $1" ;;
     esac
 }

@@ -2,7 +2,13 @@
 # ==============================================================================
 # TMUX WORKTREES - Shared Helper Functions
 # ==============================================================================
-# Requires: bash 4.0+, tmux 3.0+
+# Requires: bash 3.2+, tmux 3.0+
+
+# ==============================================================================
+# VERSION
+# ==============================================================================
+
+TMUX_WORKTREE_VERSION="1.0.0"
 
 # ==============================================================================
 # VERSION CHECKS
@@ -92,6 +98,8 @@ validate_positive_int() {
 load_config() {
     WORKTREE_BASE=$(get_tmux_option "@worktree-path" "$HOME/.tmux-worktree")
     MANAGED_DIR="$WORKTREE_BASE/__tmux_worktree_managed__"
+    # Legacy managed dir for backward compatibility with standalone script
+    LEGACY_MANAGED_DIR="$WORKTREE_BASE/__tmux_managed__"
 
     # Load and validate numeric options
     local items_raw
@@ -103,8 +111,22 @@ load_config() {
     FETCH_TIMEOUT=$(validate_positive_int "$timeout_raw" "30" "@worktree-fetch-timeout")
 
     KEYBINDING=$(get_tmux_option "@worktree-keybinding" "W")
+    DEBUG=$(get_tmux_option "@worktree-debug" "off")
 
-    export WORKTREE_BASE MANAGED_DIR ITEMS_PER_PAGE FETCH_TIMEOUT KEYBINDING
+    export WORKTREE_BASE MANAGED_DIR LEGACY_MANAGED_DIR ITEMS_PER_PAGE FETCH_TIMEOUT KEYBINDING DEBUG
+}
+
+# ==============================================================================
+# DEBUG LOGGING
+# ==============================================================================
+
+# Log debug message if debug mode is enabled
+# Usage: debug_log "message"
+debug_log() {
+    if [ "$DEBUG" = "on" ]; then
+        local log_file="$WORKTREE_BASE/.tmux-worktree.log"
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$log_file" 2>/dev/null || true
+    fi
 }
 
 # ==============================================================================
@@ -130,14 +152,16 @@ get_session_name() {
 # Portable timeout command wrapper
 # On Linux: uses coreutils timeout
 # On macOS: uses gtimeout (from coreutils) or falls back to no timeout
+# Uses --foreground to properly terminate child processes on timeout
 run_with_timeout() {
     local seconds="$1"
     shift
 
     if command -v timeout >/dev/null 2>&1; then
-        timeout "$seconds" "$@"
+        # --foreground ensures child processes are killed on timeout
+        timeout --foreground "$seconds" "$@" 2>/dev/null || timeout "$seconds" "$@"
     elif command -v gtimeout >/dev/null 2>&1; then
-        gtimeout "$seconds" "$@"
+        gtimeout --foreground "$seconds" "$@" 2>/dev/null || gtimeout "$seconds" "$@"
     else
         # No timeout available - run without timeout protection
         "$@"
