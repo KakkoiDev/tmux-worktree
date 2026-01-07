@@ -619,50 +619,6 @@ show_remove_worktree_menu() {
 }
 
 # ==============================================================================
-# HELP MENU
-# ==============================================================================
-
-# Show help menu with keybindings
-show_help_menu() {
-    local script_path="$SCRIPT_DIR/worktree_manager.sh"
-
-    # Build help content - tmux menu format: "label" "key" "command"
-    # Using "" for key means no shortcut, "" for command means separator/info
-    local options=""
-
-    # Main menu section
-    options="$options \"─ Main Menu ─\" \"\" \"\""
-    options="$options \"  List worktrees\" \"l\" \"\""
-    options="$options \"  Add worktree\" \"a\" \"\""
-    options="$options \"  Remove worktree\" \"d\" \"\""
-    options="$options \"\" \"\" \"\""
-
-    # Navigation section
-    options="$options \"─ Navigation ─\" \"\" \"\""
-    options="$options \"  Next page\" \"$KEY_NEXT\" \"\""
-    options="$options \"  Previous page\" \"$KEY_PREV\" \"\""
-    options="$options \"  Back\" \"$KEY_BACK\" \"\""
-    options="$options \"\" \"\" \"\""
-
-    # Filter section
-    options="$options \"─ Filtering ─\" \"\" \"\""
-    options="$options \"  Filter by pattern\" \"$KEY_FILTER\" \"\""
-    options="$options \"  Clear filter\" \"$KEY_CLEAR_FILTER\" \"\""
-    options="$options \"\" \"\" \"\""
-
-    # Add worktree section
-    options="$options \"─ Add Menu ─\" \"\" \"\""
-    options="$options \"  New branch\" \"$KEY_NEW\" \"\""
-    options="$options \"  Fetch remote\" \"$KEY_FETCH\" \"\""
-    options="$options \"\" \"\" \"\""
-
-    # Back option
-    options="$options \"← Back\" \"$KEY_BACK\" \"run-shell \\\". '$script_path' && tmux_worktrees_main\\\"\""
-
-    display_menu "Help - Keybindings" "$options"
-}
-
-# ==============================================================================
 # MAIN MENU
 # ==============================================================================
 
@@ -671,14 +627,8 @@ tmux_worktrees_main() {
     local script_path="$SCRIPT_DIR/worktree_manager.sh"
     local options='"List" "l" "run-shell \". '"'"$script_path"'"' && show_worktree_menu\"" \
     "Add" "a" "run-shell \". '"'"$script_path"'"' && show_add_worktree_menu\"" \
-    "Remove" "d" "run-shell \". '"'"$script_path"'"' && show_remove_worktree_menu\""'
-
-    # Add help option if enabled
-    if [ "$SHOW_HELP_MENU" = "on" ]; then
-        options="$options \"Help\" \"$KEY_HELP\" \"run-shell \\\". '$script_path' && show_help_menu\\\"\""
-    fi
-
-    options="$options \"Quit\" \"$KEY_QUIT\" \"\""
+    "Remove" "d" "run-shell \". '"'"$script_path"'"' && show_remove_worktree_menu\"" \
+    "Quit" "'"$KEY_QUIT"'" ""'
 
     display_menu "Git Worktrees" "$options"
 }
@@ -726,7 +676,6 @@ main() {
         "remove_worktree") remove_worktree "$2" "$3" "$4" "$5" "$6" ;;
         "create_new_worktree") create_new_worktree "$2" ;;
         "fetch_remote_branches") fetch_remote_branches ;;
-        "show_help_menu") show_help_menu ;;
         "version") show_version ;;
         "health_check") health_check ;;
         *) echo "Unknown command: $1" ;;

@@ -52,7 +52,6 @@ Press `prefix + W` (default) to open the main menu.
 - **List** (`l`) - Switch to an existing worktree
 - **Add** (`a`) - Create a new worktree from a branch
 - **Remove** (`d`) - Remove an existing worktree
-- **Help** (`h`) - Show keybindings help
 
 ### Navigation (customizable)
 
@@ -86,9 +85,6 @@ set -g @worktree-items-per-page "20"
 
 # Fetch timeout in seconds (default: 30)
 set -g @worktree-fetch-timeout "60"
-
-# Show/hide help menu (default: on)
-set -g @worktree-help-menu "off"
 ```
 
 ### Custom Keybindings
@@ -107,7 +103,6 @@ set -g @worktree-key-filter "/"      # Filter (default: f)
 set -g @worktree-key-clear-filter "x" # Clear filter (default: c)
 set -g @worktree-key-new "n"         # New branch (default: n)
 set -g @worktree-key-fetch "r"       # Fetch remote (default: r)
-set -g @worktree-key-help "?"        # Help menu (default: h)
 ```
 
 ## How It Works

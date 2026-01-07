@@ -147,17 +147,12 @@ load_config() {
     KEY_FILTER=$(get_tmux_option "@worktree-key-filter" "f")
     KEY_CLEAR_FILTER=$(get_tmux_option "@worktree-key-clear-filter" "c")
     KEY_FETCH=$(get_tmux_option "@worktree-key-fetch" "r")
-    KEY_HELP=$(get_tmux_option "@worktree-key-help" "h")
     KEY_BACK=$(get_tmux_option "@worktree-key-back" "BSpace")
     KEY_QUIT=$(get_tmux_option "@worktree-key-quit" "q")
     KEY_NEW=$(get_tmux_option "@worktree-key-new" "n")
 
-    # Help menu toggle
-    SHOW_HELP_MENU=$(get_tmux_option "@worktree-help-menu" "on")
-
     export WORKTREE_BASE MANAGED_DIR LEGACY_MANAGED_DIR ITEMS_PER_PAGE FETCH_TIMEOUT KEYBINDING DEBUG
-    export KEY_NEXT KEY_PREV KEY_FILTER KEY_CLEAR_FILTER KEY_FETCH KEY_HELP KEY_BACK KEY_QUIT KEY_NEW
-    export SHOW_HELP_MENU
+    export KEY_NEXT KEY_PREV KEY_FILTER KEY_CLEAR_FILTER KEY_FETCH KEY_BACK KEY_QUIT KEY_NEW
 }
 
 # ==============================================================================
