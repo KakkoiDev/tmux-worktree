@@ -86,27 +86,36 @@ remove_worktree() {
     local session_name="$4"
     local current_page="$5"
 
+    debug_log "remove_worktree called: path='$worktree_path' branch='$branch_name' managed=$is_managed session='$session_name'"
+
     # Remove the worktree with timeout protection
     # Note: No retry without timeout to prevent infinite hang
     if run_with_timeout 10 git worktree remove --force "$worktree_path" > /dev/null 2>&1; then
+        debug_log "remove_worktree: worktree removed OK"
         tmux display-message "Worktree removed: $worktree_path"
     else
+        debug_log "remove_worktree: FAILED to remove worktree"
         tmux display-message "Worktree removal failed - try 'git worktree remove $worktree_path' manually"
     fi
 
     # If it's a managed worktree, also delete the branch with timeout
     if [ "$is_managed" = "true" ]; then
+        debug_log "remove_worktree: deleting managed branch $branch_name"
         if run_with_timeout 5 git branch -D "$branch_name" > /dev/null 2>&1; then
+            debug_log "remove_worktree: branch deleted OK"
             tmux display-message "Branch deleted: $branch_name"
         else
+            debug_log "remove_worktree: FAILED to delete branch"
             tmux display-message "Branch deletion failed - try 'git branch -D $branch_name' manually"
         fi
     fi
 
     # Kill the tmux session if it exists (try both naming patterns)
     if tmux kill-session -t "$session_name" 2>/dev/null; then
+        debug_log "remove_worktree: session killed: $session_name"
         tmux display-message "Session killed: $session_name"
     elif tmux kill-session -t "$branch_name" 2>/dev/null; then
+        debug_log "remove_worktree: session killed: $branch_name"
         tmux display-message "Session killed: $branch_name"
     fi
 
@@ -478,6 +487,7 @@ display_menu() {
 
 # Show worktree list menu with pagination and optional filter
 show_worktree_menu() {
+    debug_log "show_worktree_menu called: page=${1:-1} filter='${2:-}'"
     local page
     page=$(validate_page "${1:-1}")
     local filter
@@ -491,6 +501,8 @@ show_worktree_menu() {
     worktree_items=$(get_worktree_data "$page" "$filter")
     local nav_options
     nav_options=$(generate_nav_options "$page" "$total_pages" "show_worktree_menu" "$filter")
+
+    debug_log "show_worktree_menu: total_pages=$total_pages items_count=$(echo "$worktree_items" | grep -c '\"' || echo 0)"
 
     # Build title with filter indicator
     local title="Worktrees (Page $page/$total_pages)"
@@ -508,6 +520,7 @@ show_worktree_menu() {
     if [ -n "$worktree_items" ]; then
         local all_options="$filter_option $clear_option $worktree_items $nav_options"
     else
+        debug_log "show_worktree_menu: no worktrees found"
         local all_options="$filter_option $clear_option \"(No worktrees found)\" \"\" \"\" $nav_options"
     fi
 
@@ -517,30 +530,38 @@ show_worktree_menu() {
 # Create new worktree helper function
 create_new_worktree() {
     local branch="$1"
+    debug_log "create_new_worktree called: branch='$branch'"
     local project_name
     project_name=$(get_project_name)
     local session_name="${project_name}-${branch//\//-}"
+    debug_log "create_new_worktree: project=$project_name session=$session_name"
 
     # Ensure managed directory exists
     if ! mkdir -p "$MANAGED_DIR" 2>/dev/null; then
+        debug_log "create_new_worktree: FAILED to create $MANAGED_DIR"
         tmux display-message "Failed to create directory: $MANAGED_DIR (check permissions)"
         return 1
     fi
 
     if git worktree add "$MANAGED_DIR/$branch" -b "$branch" > /dev/null 2>&1; then
+        debug_log "create_new_worktree: worktree created at $MANAGED_DIR/$branch"
         if tmux new-session -d -c "$MANAGED_DIR/$branch" -s "$session_name" && \
            tmux switch-client -t "$session_name"; then
+            debug_log "create_new_worktree: SUCCESS session=$session_name"
             tmux display-message "Created worktree and session: $session_name"
         else
+            debug_log "create_new_worktree: worktree OK but session FAILED"
             tmux display-message "Worktree created but session failed - try 'tmux new -s $session_name'"
         fi
     else
+        debug_log "create_new_worktree: FAILED git worktree add (branch may exist)"
         tmux display-message "Failed to create worktree - branch '$branch' may already exist"
     fi
 }
 
 # Show add worktree menu with pagination, optional filter, and optional remote branches
 show_add_worktree_menu() {
+    debug_log "show_add_worktree_menu called: page=${1:-1} filter='${2:-}' include_remotes=${3:-0}"
     local page
     page=$(validate_page "${1:-1}")
     local filter
@@ -555,6 +576,8 @@ show_add_worktree_menu() {
     branch_items=$(get_branch_data "$page" "$filter" "$include_remotes")
     local nav_options
     nav_options=$(generate_nav_options "$page" "$total_pages" "show_add_worktree_menu" "$filter" "$include_remotes")
+
+    debug_log "show_add_worktree_menu: total_pages=$total_pages include_remotes=$include_remotes"
 
     # Build title with filter and remote indicator
     local title="Add Worktree (Page $page/$total_pages)"
@@ -582,6 +605,7 @@ show_add_worktree_menu() {
 
 # Show remove worktree menu with pagination and optional filter
 show_remove_worktree_menu() {
+    debug_log "show_remove_worktree_menu called: page=${1:-1} filter='${2:-}'"
     local page
     page=$(validate_page "${1:-1}")
     local filter
@@ -595,6 +619,8 @@ show_remove_worktree_menu() {
     worktree_items=$(get_removable_worktree_data "$page" "$filter")
     local nav_options
     nav_options=$(generate_nav_options "$page" "$total_pages" "show_remove_worktree_menu" "$filter")
+
+    debug_log "show_remove_worktree_menu: total_pages=$total_pages"
 
     # Build title with filter indicator
     local title="Remove Worktree (Page $page/$total_pages)"
@@ -612,6 +638,7 @@ show_remove_worktree_menu() {
     if [ -n "$worktree_items" ]; then
         local all_options="$filter_option $clear_option $worktree_items $nav_options"
     else
+        debug_log "show_remove_worktree_menu: no removable worktrees found"
         local all_options="$filter_option $clear_option \"(No removable worktrees found)\" \"\" \"\" $nav_options"
     fi
 
@@ -624,6 +651,7 @@ show_remove_worktree_menu() {
 
 # Main tmux worktrees menu
 tmux_worktrees_main() {
+    debug_log "tmux_worktrees_main called"
     local script_path="$SCRIPT_DIR/worktree_manager.sh"
     local options='"List" "l" "run-shell \". '"'"$script_path"'"' && show_worktree_menu\"" \
     "Add" "a" "run-shell \". '"'"$script_path"'"' && show_add_worktree_menu\"" \

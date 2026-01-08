@@ -153,6 +153,14 @@ load_config() {
 
     export WORKTREE_BASE MANAGED_DIR LEGACY_MANAGED_DIR ITEMS_PER_PAGE FETCH_TIMEOUT KEYBINDING DEBUG
     export KEY_NEXT KEY_PREV KEY_FILTER KEY_CLEAR_FILTER KEY_FETCH KEY_BACK KEY_QUIT KEY_NEW
+
+    # Log config if debug enabled
+    if [ "$DEBUG" = "on" ]; then
+        debug_log "=== Config loaded ==="
+        debug_log "WORKTREE_BASE=$WORKTREE_BASE"
+        debug_log "ITEMS_PER_PAGE=$ITEMS_PER_PAGE FETCH_TIMEOUT=$FETCH_TIMEOUT"
+        debug_log "Keys: next=$KEY_NEXT prev=$KEY_PREV filter=$KEY_FILTER back=$KEY_BACK"
+    fi
 }
 
 # ==============================================================================
