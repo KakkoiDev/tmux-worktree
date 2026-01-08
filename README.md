@@ -6,7 +6,7 @@ A tmux plugin for managing git worktrees with an interactive menu interface.
 
 - **Switch Worktrees**: Quickly switch between existing git worktrees
 - **Create Worktrees**: Create new worktrees from local or remote branches
-- **Remove Worktrees**: Clean up worktrees with optional branch deletion
+- **Remove Worktrees**: Clean up worktrees (branches are preserved)
 - **Remote Branch Support**: Fetch and create worktrees from remote branches
 - **Filter/Search**: Filter worktrees and branches by pattern (supports `*` and `?` wildcards)
 - **Pagination**: Navigate large lists with keyboard shortcuts
@@ -107,10 +107,20 @@ set -g @worktree-key-fetch "r"       # Fetch remote (default: r)
 
 ## How It Works
 
-### Managed vs Existing Worktrees
+### Worktree Storage
 
-- **Managed worktrees**: Created via "New" in the Add Worktree menu. Stored in `@worktree-path/__tmux_worktree_managed__/`. When removed, both the worktree and branch are deleted.
-- **Existing worktrees**: Created from existing branches. When removed, only the worktree is deleted; the branch is preserved.
+Worktrees are organized by project name:
+
+```
+~/.tmux-worktree/
+├── my-project/
+│   ├── master/
+│   └── feature/login/
+├── other-project/
+│   └── bugfix/header/
+```
+
+When you remove a worktree, only the worktree directory is deleted. The git branch is always preserved - delete branches manually with `git branch -D` if needed.
 
 ### Session Naming
 

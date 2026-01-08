@@ -125,9 +125,6 @@ load_config() {
     if [ -z "$WORKTREE_BASE" ]; then
         WORKTREE_BASE="$HOME/.tmux-worktree"
     fi
-    MANAGED_DIR="$WORKTREE_BASE/__tmux_worktree_managed__"
-    # Legacy managed dir for backward compatibility with standalone script
-    LEGACY_MANAGED_DIR="$WORKTREE_BASE/__tmux_managed__"
 
     # Load and validate numeric options
     local items_raw
@@ -151,7 +148,7 @@ load_config() {
     KEY_QUIT=$(get_tmux_option "@worktree-key-quit" "q")
     KEY_NEW=$(get_tmux_option "@worktree-key-new" "n")
 
-    export WORKTREE_BASE MANAGED_DIR LEGACY_MANAGED_DIR ITEMS_PER_PAGE FETCH_TIMEOUT KEYBINDING DEBUG
+    export WORKTREE_BASE ITEMS_PER_PAGE FETCH_TIMEOUT KEYBINDING DEBUG
     export KEY_NEXT KEY_PREV KEY_FILTER KEY_CLEAR_FILTER KEY_FETCH KEY_BACK KEY_QUIT KEY_NEW
 
     # Log config if debug enabled

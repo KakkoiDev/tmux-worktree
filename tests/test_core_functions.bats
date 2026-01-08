@@ -244,26 +244,25 @@ teardown() {
     git worktree remove -f "$wt_path" 2>/dev/null || true
 }
 
-@test "get_removable_worktree_data detects managed worktrees" {
+@test "get_removable_worktree_data returns worktree entries" {
     source "$SCRIPTS_DIR/worktree_manager.sh"
 
     # Override WORKTREE_BASE for test isolation
     local test_worktree_base="${TEST_REPO_DIR}-worktree-base"
     WORKTREE_BASE="$test_worktree_base"
-    MANAGED_DIR="$WORKTREE_BASE/__tmux_worktree_managed__"
 
-    # Create managed worktree
-    mkdir -p "$MANAGED_DIR"
-    git worktree add -q "$MANAGED_DIR/test-branch" -b "managed-test"
+    # Create worktree
+    mkdir -p "$WORKTREE_BASE"
+    git worktree add -q "$WORKTREE_BASE/test-branch" -b "test-worktree"
 
     run get_removable_worktree_data 1
     assert_success
-    assert_contains "$output" "managed-test"
-    # Managed worktrees should have "true" flag for branch deletion
-    assert_contains "$output" "true"
+    assert_contains "$output" "test-worktree"
+    # Should include remove_worktree command
+    assert_contains "$output" "remove_worktree"
 
     # Cleanup
-    git worktree remove -f "$MANAGED_DIR/test-branch" 2>/dev/null || true
+    git worktree remove -f "$WORKTREE_BASE/test-branch" 2>/dev/null || true
     rm -rf "$test_worktree_base"
 }
 

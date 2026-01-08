@@ -82,41 +82,26 @@ get_project_name() {
 remove_worktree() {
     local worktree_path="$1"
     local branch_name="$2"
-    local is_managed="$3"
-    local session_name="$4"
-    local current_page="$5"
+    local session_name="$3"
+    local current_page="$4"
 
-    debug_log "remove_worktree called: path='$worktree_path' branch='$branch_name' managed=$is_managed session='$session_name'"
+    debug_log "remove_worktree called: path='$worktree_path' branch='$branch_name' session='$session_name'"
 
     # Remove the worktree with timeout protection
-    # Note: No retry without timeout to prevent infinite hang
+    # Note: Branch is NOT deleted - user can do that manually if needed
     if run_with_timeout 10 git worktree remove --force "$worktree_path" > /dev/null 2>&1; then
         debug_log "remove_worktree: worktree removed OK"
-        tmux display-message "Worktree removed: $worktree_path"
+        tmux display-message "Worktree removed (branch kept): $branch_name"
     else
         debug_log "remove_worktree: FAILED to remove worktree"
         tmux display-message "Worktree removal failed - try 'git worktree remove $worktree_path' manually"
     fi
 
-    # If it's a managed worktree, also delete the branch with timeout
-    if [ "$is_managed" = "true" ]; then
-        debug_log "remove_worktree: deleting managed branch $branch_name"
-        if run_with_timeout 5 git branch -D "$branch_name" > /dev/null 2>&1; then
-            debug_log "remove_worktree: branch deleted OK"
-            tmux display-message "Branch deleted: $branch_name"
-        else
-            debug_log "remove_worktree: FAILED to delete branch"
-            tmux display-message "Branch deletion failed - try 'git branch -D $branch_name' manually"
-        fi
-    fi
-
     # Kill the tmux session if it exists (try both naming patterns)
     if tmux kill-session -t "$session_name" 2>/dev/null; then
         debug_log "remove_worktree: session killed: $session_name"
-        tmux display-message "Session killed: $session_name"
     elif tmux kill-session -t "$branch_name" 2>/dev/null; then
         debug_log "remove_worktree: session killed: $branch_name"
-        tmux display-message "Session killed: $branch_name"
     fi
 
     # Refresh the menu
@@ -238,7 +223,7 @@ get_branch_data() {
             # Apply filter (case-insensitive) - match against the branch name portion
             match_name = is_remote ? local_branch : branch
             if (filter == "" || tolower(match_name) ~ tolower(filter)) {
-                worktree_path = base "/" local_branch
+                worktree_path = base "/" project "/" local_branch
                 session_name = project "-" local_branch
                 gsub("/", "-", session_name)
 
@@ -304,15 +289,8 @@ get_removable_worktree_data() {
                     session_name = project "-" branch
                     gsub("/", "-", session_name)
 
-                    # Check if worktree is in managed directory to decide whether to delete branch
-                    # Supports both current and legacy managed directory names
-                    if (path ~ /__tmux_worktree_managed__/ || path ~ /__tmux_managed__/) {
-                        # Managed worktree - remove both worktree and branch
-                        print "\"" branch "\" \"\" \"display-message \\\"Removing managed worktree and branch...\\\" ; run-shell \\\". " script_path " && remove_worktree \\\\\\\"" full_path "\\\\\\\" \\\\\\\"" branch "\\\\\\\" true \\\\\\\"" session_name "\\\\\\\" " current_page "\\\"\""
-                    } else {
-                        # Existing branch worktree - only remove worktree, keep branch
-                        print "\"" branch "\" \"\" \"display-message \\\"Removing worktree (keeping branch)...\\\" ; run-shell \\\". " script_path " && remove_worktree \\\\\\\"" full_path "\\\\\\\" \\\\\\\"" branch "\\\\\\\" false \\\\\\\"" session_name "\\\\\\\" " current_page "\\\"\""
-                    }
+                    # Remove worktree only (branch is always kept)
+                    print "\"" branch "\" \"\" \"display-message \\\"Removing worktree...\\\" ; run-shell \\\". " script_path " && remove_worktree \\\\\\\"" full_path "\\\\\\\" \\\\\\\"" branch "\\\\\\\" \\\\\\\"" session_name "\\\\\\\" " current_page "\\\"\""
                 }
             }
         }
@@ -325,8 +303,8 @@ get_removable_worktree_data() {
                 if (filter == "" || tolower(branch) ~ tolower(filter)) {
                     session_name = project "-detached-" head_sha
 
-                    # Detached HEAD worktrees - only remove worktree (no branch to delete)
-                    print "\"" branch "\" \"\" \"display-message \\\"Removing detached worktree...\\\" ; run-shell \\\". " script_path " && remove_worktree \\\\\\\"" full_path "\\\\\\\" \\\\\\\"\\\\\\\" false \\\\\\\"" session_name "\\\\\\\" " current_page "\\\"\""
+                    # Detached HEAD worktrees - remove worktree only
+                    print "\"" branch "\" \"\" \"display-message \\\"Removing worktree...\\\" ; run-shell \\\". " script_path " && remove_worktree \\\\\\\"" full_path "\\\\\\\" \\\\\\\"\\\\\\\" \\\\\\\"" session_name "\\\\\\\" " current_page "\\\"\""
                 }
             }
         }
@@ -543,18 +521,19 @@ create_new_worktree() {
     local project_name
     project_name=$(get_project_name)
     local session_name="${project_name}-${branch//\//-}"
-    debug_log "create_new_worktree: project=$project_name session=$session_name"
+    local worktree_path="$WORKTREE_BASE/$project_name/$branch"
+    debug_log "create_new_worktree: project=$project_name session=$session_name path=$worktree_path"
 
-    # Ensure managed directory exists
-    if ! mkdir -p "$MANAGED_DIR" 2>/dev/null; then
-        debug_log "create_new_worktree: FAILED to create $MANAGED_DIR"
-        tmux display-message "Failed to create directory: $MANAGED_DIR (check permissions)"
+    # Ensure project directory exists
+    if ! mkdir -p "$WORKTREE_BASE/$project_name" 2>/dev/null; then
+        debug_log "create_new_worktree: FAILED to create $WORKTREE_BASE/$project_name"
+        tmux display-message "Failed to create directory: $WORKTREE_BASE/$project_name (check permissions)"
         return 1
     fi
 
-    if git worktree add "$MANAGED_DIR/$branch" -b "$branch" > /dev/null 2>&1; then
-        debug_log "create_new_worktree: worktree created at $MANAGED_DIR/$branch"
-        if tmux new-session -d -c "$MANAGED_DIR/$branch" -s "$session_name" && \
+    if git worktree add "$worktree_path" -b "$branch" > /dev/null 2>&1; then
+        debug_log "create_new_worktree: worktree created at $worktree_path"
+        if tmux new-session -d -c "$worktree_path" -s "$session_name" && \
            tmux switch-client -t "$session_name"; then
             debug_log "create_new_worktree: SUCCESS session=$session_name"
             tmux display-message "Created worktree and session: $session_name"

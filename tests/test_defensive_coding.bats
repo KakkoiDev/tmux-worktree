@@ -120,11 +120,6 @@ teardown() {
     [ -n "$WORKTREE_BASE" ]
 }
 
-@test "MANAGED_DIR is derived from WORKTREE_BASE" {
-    load_config
-    assert_equal "$WORKTREE_BASE/__tmux_worktree_managed__" "$MANAGED_DIR"
-}
-
 # ==============================================================================
 # Page Count Minimum Tests (Issue #21 - Page 1/0 fix)
 # ==============================================================================
