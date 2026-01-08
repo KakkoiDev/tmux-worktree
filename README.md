@@ -21,7 +21,7 @@ A tmux plugin for managing git worktrees with an interactive menu interface.
 
 ## Installation
 
-### With TPM (recommended)
+### With [TPM](https://github.com/tmux-plugins/tpm) (recommended)
 
 Add to your `~/.tmux.conf`:
 
@@ -179,6 +179,15 @@ tmux set-option -gu @worktree-path
 tmux set-option -gu @worktree-items-per-page
 tmux set-option -gu @worktree-fetch-timeout
 tmux set-option -gu @worktree-keybinding
+tmux set-option -gu @worktree-debug
+tmux set-option -gu @worktree-key-next
+tmux set-option -gu @worktree-key-prev
+tmux set-option -gu @worktree-key-filter
+tmux set-option -gu @worktree-key-clear-filter
+tmux set-option -gu @worktree-key-fetch
+tmux set-option -gu @worktree-key-back
+tmux set-option -gu @worktree-key-quit
+tmux set-option -gu @worktree-key-new
 
 # Optionally remove worktree directory (WARNING: deletes all managed worktrees)
 # rm -rf ~/.tmux-worktree
