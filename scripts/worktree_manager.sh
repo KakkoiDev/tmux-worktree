@@ -69,11 +69,22 @@ fetch_remote_branches() {
 # CORE DATA FUNCTIONS
 # ==============================================================================
 
-# Get project name from git repository root directory
+# Get project name from git repository (works from worktrees too)
 # Sanitizes output to prevent command injection via malicious directory names
 get_project_name() {
     local name
-    name=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)")
+    # Use git-common-dir to get the main repo path (works from worktrees too)
+    local git_common_dir
+    git_common_dir=$(git rev-parse --git-common-dir 2>/dev/null)
+    # In worktrees, git-common-dir returns absolute path to main repo's .git
+    # In regular repos, it returns relative ".git"
+    if [ -n "$git_common_dir" ] && [[ "$git_common_dir" == /* ]]; then
+        # Absolute path means we're in a worktree - get parent directory name
+        name=$(basename "$(dirname "$git_common_dir")")
+    else
+        # Regular repo - use show-toplevel
+        name=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)")
+    fi
     # Sanitize: allow only alphanumeric, dash, underscore, dot
     echo "$name" | tr -cd 'a-zA-Z0-9_.-'
 }
