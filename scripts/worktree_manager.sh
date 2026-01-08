@@ -136,6 +136,15 @@ get_worktree_data() {
 
     local project_name
     project_name=$(get_project_name)
+
+    # Log worktree paths to debug file
+    if [ "$DEBUG" = "on" ]; then
+        debug_log "get_worktree_data: listing worktrees for page $page"
+        git worktree list | while read -r line; do
+            debug_log "  worktree: $line"
+        done
+    fi
+
     LC_ALL=C git worktree list --porcelain | LC_ALL=C awk -v home="$HOME" -v project="$project_name" -v filter="$sanitized_filter" '
         BEGIN {
             # Convert wildcard to regex
@@ -150,8 +159,6 @@ get_worktree_data() {
         /^HEAD/ {head_sha=substr($2,1,7)}  # Capture short SHA for detached HEAD
         /^branch/ {
             branch=$2
-            display_path=path
-            sub(home"/", "~/", display_path)
             sub("refs/heads/", "", branch)
             # Sanitize branch name - remove newlines and shell metacharacters
             gsub(/[\r\n]/, "", branch)
@@ -161,19 +168,17 @@ get_worktree_data() {
             if (filter == "" || tolower(branch) ~ tolower(filter)) {
                 session_name=project "-" branch
                 gsub("/", "-", session_name)
-                print "\"" display_path " (" branch ")\" \"\" \"run-shell \\\"tmux has-session -t " session_name " 2>/dev/null && tmux switch-client -t " session_name " || (tmux new-session -d -c \\\\\\\"" full_path "\\\\\\\" -s " session_name " && tmux switch-client -t " session_name ")\\\"\""
+                print "\"" branch "\" \"\" \"run-shell \\\"tmux has-session -t " session_name " 2>/dev/null && tmux switch-client -t " session_name " || (tmux new-session -d -c \\\\\\\"" full_path "\\\\\\\" -s " session_name " && tmux switch-client -t " session_name ")\\\"\""
             }
         }
         /^detached/ {
             # Handle detached HEAD worktrees
-            display_path=path
-            sub(home"/", "~/", display_path)
             branch="HEAD@" head_sha
 
             # Apply filter (case-insensitive)
             if (filter == "" || tolower(branch) ~ tolower(filter)) {
                 session_name=project "-detached-" head_sha
-                print "\"" display_path " (" branch ")\" \"\" \"run-shell \\\"tmux has-session -t " session_name " 2>/dev/null && tmux switch-client -t " session_name " || (tmux new-session -d -c \\\\\\\"" full_path "\\\\\\\" -s " session_name " && tmux switch-client -t " session_name ")\\\"\""
+                print "\"" branch "\" \"\" \"run-shell \\\"tmux has-session -t " session_name " 2>/dev/null && tmux switch-client -t " session_name " || (tmux new-session -d -c \\\\\\\"" full_path "\\\\\\\" -s " session_name " && tmux switch-client -t " session_name ")\\\"\""
             }
         }
     ' | sed -n "${start_line},${end_line}p" | tr '\n' ' '
@@ -264,6 +269,14 @@ get_removable_worktree_data() {
     project_name=$(get_project_name)
     local script_path="$SCRIPT_DIR/worktree_manager.sh"
 
+    # Log worktree paths to debug file
+    if [ "$DEBUG" = "on" ]; then
+        debug_log "get_removable_worktree_data: listing worktrees for page $page"
+        git worktree list | while read -r line; do
+            debug_log "  worktree: $line"
+        done
+    fi
+
     LC_ALL=C git worktree list --porcelain | LC_ALL=C awk -v home="$HOME" -v current_dir="$(pwd)" -v script_path="$script_path" -v current_page="$page" -v project="$project_name" -v filter="$sanitized_filter" '
         BEGIN {
             if (filter != "") {
@@ -282,8 +295,6 @@ get_removable_worktree_data() {
         /^branch/ {
             if (path != current_dir) {
                 branch = $2
-                display_path = path
-                sub(home"/", "~/", display_path)
                 sub("refs/heads/", "", branch)
                 # Sanitize branch name - remove shell metacharacters
                 gsub(/[^a-zA-Z0-9._\/-]/, "", branch)
@@ -297,10 +308,10 @@ get_removable_worktree_data() {
                     # Supports both current and legacy managed directory names
                     if (path ~ /__tmux_worktree_managed__/ || path ~ /__tmux_managed__/) {
                         # Managed worktree - remove both worktree and branch
-                        print "\"" display_path " (" branch ")\" \"\" \"display-message \\\"Removing managed worktree and branch...\\\" ; run-shell \\\". " script_path " && remove_worktree \\\\\\\"" full_path "\\\\\\\" \\\\\\\"" branch "\\\\\\\" true \\\\\\\"" session_name "\\\\\\\" " current_page "\\\"\""
+                        print "\"" branch "\" \"\" \"display-message \\\"Removing managed worktree and branch...\\\" ; run-shell \\\". " script_path " && remove_worktree \\\\\\\"" full_path "\\\\\\\" \\\\\\\"" branch "\\\\\\\" true \\\\\\\"" session_name "\\\\\\\" " current_page "\\\"\""
                     } else {
                         # Existing branch worktree - only remove worktree, keep branch
-                        print "\"" display_path " (" branch ")\" \"\" \"display-message \\\"Removing worktree (keeping branch)...\\\" ; run-shell \\\". " script_path " && remove_worktree \\\\\\\"" full_path "\\\\\\\" \\\\\\\"" branch "\\\\\\\" false \\\\\\\"" session_name "\\\\\\\" " current_page "\\\"\""
+                        print "\"" branch "\" \"\" \"display-message \\\"Removing worktree (keeping branch)...\\\" ; run-shell \\\". " script_path " && remove_worktree \\\\\\\"" full_path "\\\\\\\" \\\\\\\"" branch "\\\\\\\" false \\\\\\\"" session_name "\\\\\\\" " current_page "\\\"\""
                     }
                 }
             }
@@ -308,8 +319,6 @@ get_removable_worktree_data() {
         /^detached/ {
             # Handle detached HEAD worktrees
             if (path != current_dir) {
-                display_path = path
-                sub(home"/", "~/", display_path)
                 branch = "HEAD@" head_sha
 
                 # Apply filter (case-insensitive)
@@ -317,7 +326,7 @@ get_removable_worktree_data() {
                     session_name = project "-detached-" head_sha
 
                     # Detached HEAD worktrees - only remove worktree (no branch to delete)
-                    print "\"" display_path " (" branch ")\" \"\" \"display-message \\\"Removing detached worktree...\\\" ; run-shell \\\". " script_path " && remove_worktree \\\\\\\"" full_path "\\\\\\\" \\\\\\\"\\\\\\\" false \\\\\\\"" session_name "\\\\\\\" " current_page "\\\"\""
+                    print "\"" branch "\" \"\" \"display-message \\\"Removing detached worktree...\\\" ; run-shell \\\". " script_path " && remove_worktree \\\\\\\"" full_path "\\\\\\\" \\\\\\\"\\\\\\\" false \\\\\\\"" session_name "\\\\\\\" " current_page "\\\"\""
                 }
             }
         }
