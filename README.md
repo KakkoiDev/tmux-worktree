@@ -163,34 +163,12 @@ set -g @worktree-keybinding "T"
 
 ## Uninstall
 
-### With TPM
-
 1. Remove the plugin line from `~/.tmux.conf`
-2. Press `prefix + alt + u` to uninstall
+2. Reload tmux config (`prefix + r`) or restart tmux
 
-### Manual cleanup
-
+Optionally remove managed worktrees:
 ```bash
-# Remove keybinding (replace W with your keybinding)
-tmux unbind-key W
-
-# Remove tmux options
-tmux set-option -gu @worktree-path
-tmux set-option -gu @worktree-items-per-page
-tmux set-option -gu @worktree-fetch-timeout
-tmux set-option -gu @worktree-keybinding
-tmux set-option -gu @worktree-debug
-tmux set-option -gu @worktree-key-next
-tmux set-option -gu @worktree-key-prev
-tmux set-option -gu @worktree-key-filter
-tmux set-option -gu @worktree-key-clear-filter
-tmux set-option -gu @worktree-key-fetch
-tmux set-option -gu @worktree-key-back
-tmux set-option -gu @worktree-key-quit
-tmux set-option -gu @worktree-key-new
-
-# Optionally remove worktree directory (WARNING: deletes all managed worktrees)
-# rm -rf ~/.tmux-worktree
+rm -rf ~/.tmux-worktree
 ```
 
 ## Debug Mode
