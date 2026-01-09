@@ -1,6 +1,3 @@
-# Claude database files
-TASK.md
-MEMO.md
-COACH.md
-LEARN.md
-REVIEW-*.md
+# Markdown files (except README)
+*.md
+!README.md
