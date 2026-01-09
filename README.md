@@ -139,6 +139,15 @@ set -g @worktree-key-fetch "r"
 
 **Debug mode:** Enable with `set -g @worktree-debug "on"`. Logs written to `~/.tmux-worktree/.tmux-worktree.log`.
 
+## Report a Bug
+
+[Open an issue](https://github.com/KakkoiDev/tmux-worktree/issues/new) with:
+
+1. Enable debug mode: `set -g @worktree-debug "on"`
+2. Reload tmux and reproduce the issue
+3. Include relevant lines from `~/.tmux-worktree/.tmux-worktree.log`
+4. Add your tmux version (`tmux -V`) and OS
+
 ## Requirements
 
 - tmux 3.0+
