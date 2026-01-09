@@ -72,7 +72,7 @@ teardown() {
 
     tmux_set_option "@worktree-path" "/custom/worktree/path"
 
-    load_config
+    reload_config  # Use reload to bypass cache
     assert_equal "/custom/worktree/path" "$WORKTREE_BASE"
 }
 
@@ -91,7 +91,7 @@ teardown() {
 
     tmux_set_option "@worktree-items-per-page" "25"
 
-    load_config
+    reload_config  # Use reload to bypass cache
     assert_equal "25" "$ITEMS_PER_PAGE"
 }
 
@@ -110,7 +110,7 @@ teardown() {
 
     tmux_set_option "@worktree-fetch-timeout" "60"
 
-    load_config
+    reload_config  # Use reload to bypass cache
     assert_equal "60" "$FETCH_TIMEOUT"
 }
 

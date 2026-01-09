@@ -8,7 +8,7 @@
 # VERSION
 # ==============================================================================
 
-TMUX_WORKTREE_VERSION="1.0.0"
+TMUX_WORKTREE_VERSION="0.0.1"
 
 # ==============================================================================
 # VERSION CHECKS
@@ -118,32 +118,53 @@ limit_filter() {
     fi
 }
 
-# Load all configuration variables
-load_config() {
-    WORKTREE_BASE=$(get_tmux_option "@worktree-path" "$HOME/.tmux-worktree")
-    # Validate WORKTREE_BASE is not empty
-    if [ -z "$WORKTREE_BASE" ]; then
-        WORKTREE_BASE="$HOME/.tmux-worktree"
+# Get config cache file path (unique per tmux server)
+_get_config_cache_file() {
+    local tmux_pid
+    # Respect TMUX_SOCKET for testing
+    if [ -n "$TMUX_SOCKET" ]; then
+        tmux_pid=$(tmux -L "$TMUX_SOCKET" display-message -p '#{pid}' 2>/dev/null || echo "notmux")
+    else
+        tmux_pid=$(tmux display-message -p '#{pid}' 2>/dev/null || echo "notmux")
     fi
+    echo "/tmp/tmux-worktree-config-${tmux_pid}"
+}
 
-    # Load and validate numeric options
-    local items_raw
+# Check if config cache is valid (exists and less than 5 minutes old)
+_is_cache_valid() {
+    local cache_file="$1"
+    [ -f "$cache_file" ] || return 1
+
+    # Check age - cache valid for 300 seconds (5 minutes)
+    local cache_age
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        cache_age=$(( $(date +%s) - $(stat -f %m "$cache_file" 2>/dev/null || echo 0) ))
+    else
+        cache_age=$(( $(date +%s) - $(stat -c %Y "$cache_file" 2>/dev/null || echo 0) ))
+    fi
+    [ "$cache_age" -lt 300 ]
+}
+
+# Load config from tmux and write to cache file
+_load_config_from_tmux() {
+    local cache_file="$1"
+
+    WORKTREE_BASE=$(get_tmux_option "@worktree-path" "$HOME/.tmux-worktree")
+    [ -z "$WORKTREE_BASE" ] && WORKTREE_BASE="$HOME/.tmux-worktree"
+
+    local items_raw timeout_raw
     items_raw=$(get_tmux_option "@worktree-items-per-page" "15")
     ITEMS_PER_PAGE=$(validate_positive_int "$items_raw" "15" "@worktree-items-per-page")
 
-    local timeout_raw
     timeout_raw=$(get_tmux_option "@worktree-fetch-timeout" "30")
     FETCH_TIMEOUT=$(validate_positive_int "$timeout_raw" "30" "@worktree-fetch-timeout")
 
     KEYBINDING=$(get_tmux_option "@worktree-keybinding" "W")
     DEBUG=$(get_tmux_option "@worktree-debug" "off")
 
-    # Main menu key configuration
     KEY_LIST=$(get_tmux_option "@worktree-key-list" "l")
     KEY_ADD=$(get_tmux_option "@worktree-key-add" "a")
     KEY_REMOVE=$(get_tmux_option "@worktree-key-remove" "d")
-
-    # Navigation key configuration
     KEY_NEXT=$(get_tmux_option "@worktree-key-next" "i")
     KEY_PREV=$(get_tmux_option "@worktree-key-prev" "o")
     KEY_FILTER=$(get_tmux_option "@worktree-key-filter" "f")
@@ -152,6 +173,42 @@ load_config() {
     KEY_BACK=$(get_tmux_option "@worktree-key-back" "BSpace")
     KEY_QUIT=$(get_tmux_option "@worktree-key-quit" "q")
     KEY_NEW=$(get_tmux_option "@worktree-key-new" "n")
+
+    # Write to cache file for next invocation
+    cat > "$cache_file" 2>/dev/null <<CACHE
+WORKTREE_BASE='$WORKTREE_BASE'
+ITEMS_PER_PAGE='$ITEMS_PER_PAGE'
+FETCH_TIMEOUT='$FETCH_TIMEOUT'
+KEYBINDING='$KEYBINDING'
+DEBUG='$DEBUG'
+KEY_LIST='$KEY_LIST'
+KEY_ADD='$KEY_ADD'
+KEY_REMOVE='$KEY_REMOVE'
+KEY_NEXT='$KEY_NEXT'
+KEY_PREV='$KEY_PREV'
+KEY_FILTER='$KEY_FILTER'
+KEY_CLEAR_FILTER='$KEY_CLEAR_FILTER'
+KEY_FETCH='$KEY_FETCH'
+KEY_BACK='$KEY_BACK'
+KEY_QUIT='$KEY_QUIT'
+KEY_NEW='$KEY_NEW'
+CACHE
+}
+
+# Load all configuration variables (file-cached for performance)
+# First call: 15 tmux calls + write cache (~100ms)
+# Subsequent calls: 1 file read (~5ms)
+load_config() {
+    local cache_file
+    cache_file=$(_get_config_cache_file)
+
+    if _is_cache_valid "$cache_file"; then
+        # Fast path: read from cache file
+        source "$cache_file"
+    else
+        # Slow path: load from tmux and write cache
+        _load_config_from_tmux "$cache_file"
+    fi
 
     export WORKTREE_BASE ITEMS_PER_PAGE FETCH_TIMEOUT KEYBINDING DEBUG
     export KEY_LIST KEY_ADD KEY_REMOVE
@@ -164,6 +221,14 @@ load_config() {
         debug_log "ITEMS_PER_PAGE=$ITEMS_PER_PAGE FETCH_TIMEOUT=$FETCH_TIMEOUT"
         debug_log "Keys: next=$KEY_NEXT prev=$KEY_PREV filter=$KEY_FILTER back=$KEY_BACK"
     fi
+}
+
+# Force reload configuration (invalidates cache)
+reload_config() {
+    local cache_file
+    cache_file=$(_get_config_cache_file)
+    rm -f "$cache_file" 2>/dev/null
+    load_config
 }
 
 # ==============================================================================
