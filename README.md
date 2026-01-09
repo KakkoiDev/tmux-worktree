@@ -2,7 +2,7 @@
 
 > **Beta:** This plugin is under active development. Configuration options and behavior may change.
 
-Manage git worktrees with tmux sessions. Switch branches without stashing, run tests on one branch while coding on another.
+Native tmux for parallel workflows. AI agents, code reviews, tests. Each task gets its own worktree and session.
 
 <a href="https://github.com/user-attachments/assets/d9fc4507-00c4-422f-9457-c6dfbb2ef022">
   <img src="https://github.com/user-attachments/assets/3d947242-47e6-424e-872c-ef9fcf41a7b5" alt="Demo" width="600">
