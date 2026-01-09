@@ -1,0 +1,119 @@
+name: Bug Report
+description: Report a bug with tmux-worktree
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: A clear description of the bug.
+      placeholder: When I select a worktree from the List menu, nothing happens.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: How can we reproduce the issue?
+      placeholder: |
+        1. Press prefix + W
+        2. Select "List"
+        3. Select any worktree
+        4. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should have happened?
+      placeholder: Should switch to the selected worktree's tmux session.
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        ## Environment
+
+  - type: input
+    id: tmux-version
+    attributes:
+      label: tmux version
+      description: Run `tmux -V` to get this.
+      placeholder: "tmux 3.4"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      options:
+        - macOS
+        - Linux
+        - WSL
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: terminal
+    attributes:
+      label: Terminal emulator
+      description: e.g., iTerm2, Alacritty, Terminal.app, Kitty
+      placeholder: "iTerm2"
+    validations:
+      required: false
+
+  - type: dropdown
+    id: installation
+    attributes:
+      label: Installation method
+      options:
+        - TPM (tmux plugin manager)
+        - Manual
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        ## Debug Information
+
+        Enable debug mode to capture logs:
+        ```bash
+        # Add to ~/.tmux.conf
+        set -g @worktree-debug "on"
+        ```
+        Then reload tmux (`prefix + r` or `tmux source ~/.tmux.conf`) and reproduce the issue.
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Debug logs
+      description: Paste relevant lines from `~/.tmux-worktree/.tmux-worktree.log`
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: Screenshots or video
+      description: If applicable, add screenshots or a video showing the issue.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I have searched existing issues for duplicates
+          required: true
+        - label: I am using tmux 3.0 or newer
+          required: true

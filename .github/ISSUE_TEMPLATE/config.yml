@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or Help
+    url: https://github.com/KakkoiDev/tmux-worktree/discussions
+    about: For questions or help, please use Discussions instead of issues.
