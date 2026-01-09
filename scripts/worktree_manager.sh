@@ -100,12 +100,22 @@ remove_worktree() {
 
     # Remove the worktree with timeout protection
     # Note: Branch is NOT deleted - user can do that manually if needed
-    if run_with_timeout 10 git worktree remove --force "$worktree_path" > /dev/null 2>&1; then
+    local error_output
+    error_output=$(run_with_timeout 10 git worktree remove --force "$worktree_path" 2>&1)
+    local exit_code=$?
+
+    if [ $exit_code -eq 0 ]; then
         debug_log "remove_worktree: worktree removed OK"
         tmux display-message "Worktree removed (branch kept): $branch_name"
     else
-        debug_log "remove_worktree: FAILED to remove worktree"
-        tmux display-message "Worktree removal failed - try 'git worktree remove $worktree_path' manually"
+        debug_log "remove_worktree: FAILED to remove worktree: $error_output"
+        local error_msg
+        error_msg=$(echo "$error_output" | head -1 | cut -c1-60)
+        if [ -n "$error_msg" ]; then
+            tmux display-message "Remove failed: $error_msg"
+        else
+            tmux display-message "Remove failed (exit $exit_code)"
+        fi
     fi
 
     # Kill the tmux session if it exists (try both naming patterns)
@@ -167,7 +177,7 @@ get_worktree_data_with_count() {
                 if (line_num >= start && line_num <= end) {
                     session_name=project "-" branch
                     gsub("/", "-", session_name)
-                    items[line_num] = "\"" branch "\" \"\" \"run-shell \\\"tmux has-session -t " session_name " 2>/dev/null && tmux switch-client -t " session_name " || (tmux new-session -d -c \\\\\\\"" full_path "\\\\\\\" -s " session_name " && tmux switch-client -t " session_name ")\\\"\""
+                    items[line_num] = "\"" branch "\" \"\" \"run-shell \\\"tmux has-session -t " session_name " 2>/dev/null && tmux switch-client -t " session_name " || (tmux new-session -d -c \\\\\\\"" full_path "\\\\\\\" -s " session_name " && tmux switch-client -t " session_name ") || tmux display-message \\\\\\\"Failed to switch to " session_name "\\\\\\\"\\\"\""
                 }
             }
         }
@@ -181,7 +191,7 @@ get_worktree_data_with_count() {
                 line_num++
                 if (line_num >= start && line_num <= end) {
                     session_name=project "-detached-" head_sha
-                    items[line_num] = "\"" branch "\" \"\" \"run-shell \\\"tmux has-session -t " session_name " 2>/dev/null && tmux switch-client -t " session_name " || (tmux new-session -d -c \\\\\\\"" full_path "\\\\\\\" -s " session_name " && tmux switch-client -t " session_name ")\\\"\""
+                    items[line_num] = "\"" branch "\" \"\" \"run-shell \\\"tmux has-session -t " session_name " 2>/dev/null && tmux switch-client -t " session_name " || (tmux new-session -d -c \\\\\\\"" full_path "\\\\\\\" -s " session_name " && tmux switch-client -t " session_name ") || tmux display-message \\\\\\\"Failed to switch to " session_name "\\\\\\\"\\\"\""
                 }
             }
         }
@@ -625,7 +635,11 @@ create_new_worktree() {
         return 1
     fi
 
-    if git worktree add "$worktree_path" -b "$branch" > /dev/null 2>&1; then
+    local error_output
+    error_output=$(git worktree add "$worktree_path" -b "$branch" 2>&1)
+    local exit_code=$?
+
+    if [ $exit_code -eq 0 ]; then
         debug_log "create_new_worktree: worktree created at $worktree_path"
         if tmux new-session -d -c "$worktree_path" -s "$session_name" && \
            tmux switch-client -t "$session_name"; then
@@ -636,8 +650,14 @@ create_new_worktree() {
             tmux display-message "Worktree created but session failed - try 'tmux new -s $session_name'"
         fi
     else
-        debug_log "create_new_worktree: FAILED git worktree add (branch may exist)"
-        tmux display-message "Failed to create worktree - branch '$branch' may already exist"
+        debug_log "create_new_worktree: FAILED git worktree add: $error_output"
+        local error_msg
+        error_msg=$(echo "$error_output" | head -1 | cut -c1-60)
+        if [ -n "$error_msg" ]; then
+            tmux display-message "Failed: $error_msg"
+        else
+            tmux display-message "Failed to create worktree (exit $exit_code)"
+        fi
     fi
 }
 
@@ -740,6 +760,13 @@ show_remove_worktree_menu() {
 # Main tmux worktrees menu
 tmux_worktrees_main() {
     debug_log "tmux_worktrees_main called"
+
+    # Check if we're in a git repository
+    if ! git rev-parse --git-dir > /dev/null 2>&1; then
+        tmux display-message "Not in a git repository"
+        return 1
+    fi
+
     local script_path="$SCRIPT_DIR/worktree_manager.sh"
     local options='"List" "'"$KEY_LIST"'" "run-shell \". '"'"$script_path"'"' && show_worktree_menu\"" \
     "Add" "'"$KEY_ADD"'" "run-shell \". '"'"$script_path"'"' && show_add_worktree_menu\"" \
