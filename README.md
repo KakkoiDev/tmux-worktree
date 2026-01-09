@@ -7,7 +7,7 @@ Manage git worktrees with tmux sessions. Switch branches without stashing, run t
 <a href="https://github.com/user-attachments/assets/d9fc4507-00c4-422f-9457-c6dfbb2ef022">
   <img src="https://github.com/user-attachments/assets/3d947242-47e6-424e-872c-ef9fcf41a7b5" alt="Demo" width="600">
 </a><br>
-<em>Click to see full-screen video.</em>
+<a href="https://github.com/user-attachments/assets/d9fc4507-00c4-422f-9457-c6dfbb2ef022">▶ Click to watch demo</a>
 
 
 
