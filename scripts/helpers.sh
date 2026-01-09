@@ -138,7 +138,12 @@ load_config() {
     KEYBINDING=$(get_tmux_option "@worktree-keybinding" "W")
     DEBUG=$(get_tmux_option "@worktree-debug" "off")
 
-    # Menu key configuration
+    # Main menu key configuration
+    KEY_LIST=$(get_tmux_option "@worktree-key-list" "l")
+    KEY_ADD=$(get_tmux_option "@worktree-key-add" "a")
+    KEY_REMOVE=$(get_tmux_option "@worktree-key-remove" "d")
+
+    # Navigation key configuration
     KEY_NEXT=$(get_tmux_option "@worktree-key-next" "i")
     KEY_PREV=$(get_tmux_option "@worktree-key-prev" "o")
     KEY_FILTER=$(get_tmux_option "@worktree-key-filter" "f")
@@ -149,6 +154,7 @@ load_config() {
     KEY_NEW=$(get_tmux_option "@worktree-key-new" "n")
 
     export WORKTREE_BASE ITEMS_PER_PAGE FETCH_TIMEOUT KEYBINDING DEBUG
+    export KEY_LIST KEY_ADD KEY_REMOVE
     export KEY_NEXT KEY_PREV KEY_FILTER KEY_CLEAR_FILTER KEY_FETCH KEY_BACK KEY_QUIT KEY_NEW
 
     # Log config if debug enabled

@@ -89,14 +89,19 @@ set -g @worktree-fetch-timeout "60"
 
 ### Custom Keybindings
 
-All navigation keys can be customized:
+All keys can be customized:
 
 ```bash
+# Main menu keys
+set -g @worktree-key-list "l"        # List worktrees (default: l)
+set -g @worktree-key-add "a"         # Add worktree (default: a)
+set -g @worktree-key-remove "d"      # Remove worktree (default: d)
+set -g @worktree-key-quit "q"        # Quit (default: q)
+
 # Navigation keys
 set -g @worktree-key-next "j"        # Next page (default: i)
 set -g @worktree-key-prev "k"        # Previous page (default: o)
 set -g @worktree-key-back "Escape"   # Back (default: BSpace)
-set -g @worktree-key-quit "q"        # Quit (default: q)
 
 # Action keys
 set -g @worktree-key-filter "/"      # Filter (default: f)

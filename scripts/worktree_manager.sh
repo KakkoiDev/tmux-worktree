@@ -652,9 +652,9 @@ show_remove_worktree_menu() {
 tmux_worktrees_main() {
     debug_log "tmux_worktrees_main called"
     local script_path="$SCRIPT_DIR/worktree_manager.sh"
-    local options='"List" "l" "run-shell \". '"'"$script_path"'"' && show_worktree_menu\"" \
-    "Add" "a" "run-shell \". '"'"$script_path"'"' && show_add_worktree_menu\"" \
-    "Remove" "d" "run-shell \". '"'"$script_path"'"' && show_remove_worktree_menu\"" \
+    local options='"List" "'"$KEY_LIST"'" "run-shell \". '"'"$script_path"'"' && show_worktree_menu\"" \
+    "Add" "'"$KEY_ADD"'" "run-shell \". '"'"$script_path"'"' && show_add_worktree_menu\"" \
+    "Remove" "'"$KEY_REMOVE"'" "run-shell \". '"'"$script_path"'"' && show_remove_worktree_menu\"" \
     "Quit" "'"$KEY_QUIT"'" ""'
 
     display_menu "Git Worktrees" "$options"
