@@ -34,10 +34,18 @@ Fetches latest branches, creates a local tracking branch with its own worktree.
 ### Switch between tasks
 
 ```
-prefix + W  →  List  →  select any worktree
+prefix + s  →  select session
 ```
 
-Instantly switch to that worktree's tmux session. Your other session stays exactly where you left it.
+Use tmux's built-in session switcher for quick navigation between open sessions.
+
+For worktrees without an open session:
+
+```
+prefix + W  →  List  →  select worktree
+```
+
+Creates a session if needed, then switches to it.
 
 ### Clean up after merging
 
