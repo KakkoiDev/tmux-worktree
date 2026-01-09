@@ -177,7 +177,7 @@ get_worktree_data_with_count() {
                 if (line_num >= start && line_num <= end) {
                     session_name=project "-" branch
                     gsub("/", "-", session_name)
-                    items[line_num] = "\"" branch "\" \"\" \"run-shell \\\"tmux has-session -t " session_name " 2>/dev/null && tmux switch-client -t " session_name " || (tmux new-session -d -c \\\\\\\"" full_path "\\\\\\\" -s " session_name " && tmux switch-client -t " session_name ") || tmux display-message \\\\\\\"Failed to switch to " session_name "\\\\\\\"\\\"\""
+                    items[line_num] = "\"" branch "\" \"\" \"run-shell \\\"tmux has-session -t " session_name " 2>/dev/null && tmux switch-client -t " session_name " || (tmux new-session -d -c \\\\\\\"" full_path "\\\\\\\" -s " session_name " && tmux switch-client -t " session_name ")\\\"\""
                 }
             }
         }
@@ -191,7 +191,7 @@ get_worktree_data_with_count() {
                 line_num++
                 if (line_num >= start && line_num <= end) {
                     session_name=project "-detached-" head_sha
-                    items[line_num] = "\"" branch "\" \"\" \"run-shell \\\"tmux has-session -t " session_name " 2>/dev/null && tmux switch-client -t " session_name " || (tmux new-session -d -c \\\\\\\"" full_path "\\\\\\\" -s " session_name " && tmux switch-client -t " session_name ") || tmux display-message \\\\\\\"Failed to switch to " session_name "\\\\\\\"\\\"\""
+                    items[line_num] = "\"" branch "\" \"\" \"run-shell \\\"tmux has-session -t " session_name " 2>/dev/null && tmux switch-client -t " session_name " || (tmux new-session -d -c \\\\\\\"" full_path "\\\\\\\" -s " session_name " && tmux switch-client -t " session_name ")\\\"\""
                 }
             }
         }
