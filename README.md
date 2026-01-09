@@ -1,5 +1,7 @@
 # tmux-worktree
 
+> **Beta:** This plugin is under active development. Configuration options and behavior may change.
+
 Manage git worktrees with tmux sessions. Switch branches without stashing, run tests on one branch while coding on another.
 
 ## Quick Start
