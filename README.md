@@ -166,6 +166,17 @@ Add to `~/.tmux.conf`:
 run-shell ~/.tmux/plugins/tmux-worktree/worktrees.tmux
 ```
 
+## Alternatives
+
+| Tool | UI | Dependencies |
+|------|-----|--------------|
+| **tmux-worktree** | Native tmux menus | None |
+| [tmux-git-worktree](https://github.com/NigelGreenway/tmux-git-worktree) | fzf popup | fzf |
+| [sesh](https://github.com/joshmedeski/sesh) | fzf/gum | Go binary, zoxide |
+| [tmux-sessionizer](https://github.com/jrmoulton/tmux-sessionizer) | fzf | Rust binary |
+
+This plugin uses native tmux menus (no external tools) and creates separate sessions per worktree.
+
 ## Uninstall
 
 Remove the plugin line from `~/.tmux.conf` and reload. Optionally delete worktrees: `rm -rf ~/.tmux-worktree`.
