@@ -170,7 +170,7 @@ _load_config_from_tmux() {
     KEY_FILTER=$(get_tmux_option "@worktree-key-filter" "f")
     KEY_CLEAR_FILTER=$(get_tmux_option "@worktree-key-clear-filter" "c")
     KEY_FETCH=$(get_tmux_option "@worktree-key-fetch" "r")
-    KEY_BACK=$(get_tmux_option "@worktree-key-back" "BSpace")
+    KEY_BACK=$(get_tmux_option "@worktree-key-back" "b")
     KEY_QUIT=$(get_tmux_option "@worktree-key-quit" "q")
     KEY_NEW=$(get_tmux_option "@worktree-key-new" "n")
 

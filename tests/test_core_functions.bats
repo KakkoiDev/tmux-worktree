@@ -294,7 +294,7 @@ teardown() {
     run generate_nav_options 1 1 "show_worktree_menu"
     assert_success
     assert_contains "$output" "Back"
-    assert_contains "$output" "BSpace"
+    assert_contains "$output" "$KEY_BACK"
 }
 
 @test "generate_nav_options hides previous on first page" {

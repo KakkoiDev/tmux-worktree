@@ -75,7 +75,7 @@ Shows only branches matching the pattern. Supports `*` (any characters) and `?` 
 | `c` | Clear filter |
 | `n` | New branch (in Add menu) |
 | `r` | Fetch remote (in Add menu) |
-| `Backspace` | Back |
+| `b` | Back |
 | `q` | Quit |
 
 ## How It Works
@@ -118,7 +118,7 @@ set -g @worktree-key-remove "d"
 set -g @worktree-key-quit "q"
 set -g @worktree-key-next "i"
 set -g @worktree-key-prev "o"
-set -g @worktree-key-back "BSpace"
+set -g @worktree-key-back "b"
 set -g @worktree-key-filter "f"
 set -g @worktree-key-clear-filter "c"
 set -g @worktree-key-new "n"
