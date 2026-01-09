@@ -1,200 +1,155 @@
 # tmux-worktree
 
-A tmux plugin for managing git worktrees with an interactive menu interface.
+Manage git worktrees with tmux sessions. Switch branches without stashing, run tests on one branch while coding on another.
 
-## Features
+## Quick Start
 
-- **Switch Worktrees**: Quickly switch between existing git worktrees
-- **Create Worktrees**: Create new worktrees from local or remote branches
-- **Remove Worktrees**: Clean up worktrees (branches are preserved)
-- **Remote Branch Support**: Fetch and create worktrees from remote branches
-- **Filter/Search**: Filter worktrees and branches by pattern (supports `*` and `?` wildcards)
-- **Pagination**: Navigate large lists with keyboard shortcuts
-- **Session Management**: Automatically creates/switches tmux sessions per worktree
-
-## Requirements
-
-- tmux 3.0+ (uses `display-menu`)
-- git
-- bash 3.2+
-- coreutils `timeout` or `gtimeout` (optional, for fetch timeout protection)
-
-## Installation
-
-### With [TPM](https://github.com/tmux-plugins/tpm) (recommended)
-
-Add to your `~/.tmux.conf`:
+**Install with [TPM](https://github.com/tmux-plugins/tpm):**
 
 ```bash
+# Add to ~/.tmux.conf
 set -g @plugin 'KakkoiDev/tmux-worktree'
 ```
 
-Then press `prefix + I` to install.
+Press `prefix + I` to install, then `prefix + W` to open the menu.
 
-### Manual Installation
+## Workflows
+
+### Start working on a feature
+
+```
+prefix + W  →  Add  →  select "feature/login"
+```
+
+Creates a worktree at `~/.tmux-worktree/myproject/feature/login` and opens a new tmux session.
+
+### Review a colleague's PR
+
+```
+prefix + W  →  Add  →  Fetch remote  →  select "[remote] origin/fix-bug-123"
+```
+
+Fetches latest branches, creates a local tracking branch with its own worktree.
+
+### Switch between tasks
+
+```
+prefix + W  →  List  →  select any worktree
+```
+
+Instantly switch to that worktree's tmux session. Your other session stays exactly where you left it.
+
+### Clean up after merging
+
+```
+prefix + W  →  Remove  →  select worktree to delete
+```
+
+Removes the worktree directory. The git branch is preserved (delete manually with `git branch -D` if needed).
+
+### Find a specific branch
+
+```
+prefix + W  →  List  →  Filter  →  type "feature*"  →  Enter
+```
+
+Shows only branches matching the pattern. Supports `*` (any characters) and `?` (single character).
+
+## Keys
+
+| Key | Action |
+|-----|--------|
+| `l` | List worktrees |
+| `a` | Add worktree |
+| `d` | Remove worktree |
+| `i` / `o` | Next / Previous page |
+| `f` | Filter |
+| `c` | Clear filter |
+| `n` | New branch (in Add menu) |
+| `r` | Fetch remote (in Add menu) |
+| `Backspace` | Back |
+| `q` | Quit |
+
+## How It Works
+
+Worktrees are stored by project:
+
+```
+~/.tmux-worktree/
+├── myproject/
+│   ├── main/
+│   └── feature/login/
+└── other-repo/
+    └── bugfix/header/
+```
+
+Sessions are named `{project}-{branch}` (e.g., `myproject-feature-login`).
+
+## Configuration
+
+Most users don't need to configure anything. For customization:
+
+```bash
+# Change keybinding (default: W)
+set -g @worktree-keybinding "T"
+
+# Change storage path (default: ~/.tmux-worktree)
+set -g @worktree-path "~/worktrees"
+
+# Items per page (default: 15)
+set -g @worktree-items-per-page "20"
+```
+
+<details>
+<summary>All keybinding options</summary>
+
+```bash
+set -g @worktree-key-list "l"
+set -g @worktree-key-add "a"
+set -g @worktree-key-remove "d"
+set -g @worktree-key-quit "q"
+set -g @worktree-key-next "i"
+set -g @worktree-key-prev "o"
+set -g @worktree-key-back "BSpace"
+set -g @worktree-key-filter "f"
+set -g @worktree-key-clear-filter "c"
+set -g @worktree-key-new "n"
+set -g @worktree-key-fetch "r"
+```
+
+</details>
+
+## Troubleshooting
+
+**Menu doesn't appear:** Requires tmux 3.0+. Check with `tmux -V`.
+
+**Fetch times out:** Run `git fetch origin` manually. On macOS, install `brew install coreutils` for timeout support.
+
+**Keybinding conflict:** Change with `set -g @worktree-keybinding "T"`.
+
+**Debug mode:** Enable with `set -g @worktree-debug "on"`. Logs written to `~/.tmux-worktree/.tmux-worktree.log`.
+
+## Requirements
+
+- tmux 3.0+
+- git
+- bash 3.2+
+
+## Manual Installation
 
 ```bash
 git clone https://github.com/KakkoiDev/tmux-worktree ~/.tmux/plugins/tmux-worktree
 ```
 
-Add to your `~/.tmux.conf`:
+Add to `~/.tmux.conf`:
 
 ```bash
 run-shell ~/.tmux/plugins/tmux-worktree/worktrees.tmux
 ```
 
-## Usage
-
-Press `prefix + W` (default) to open the main menu.
-
-### Main Menu
-
-- **List** (`l`) - Switch to an existing worktree
-- **Add** (`a`) - Create a new worktree from a branch
-- **Remove** (`d`) - Remove an existing worktree
-
-### Navigation (customizable)
-
-- `i` / `o` - Next / Previous page
-- `f` - Filter by pattern
-- `c` - Clear filter
-- `Backspace` - Back to previous menu
-- `n` - Create new branch (in Add menu)
-- `r` - Fetch remote branches (in Add menu)
-- `q` - Quit
-
-### Filter Patterns
-
-- `feature*` - Match branches starting with "feature"
-- `*fix*` - Match branches containing "fix"
-- `bug?123` - Match "bug" + any single character + "123"
-
-## Configuration
-
-Add to your `~/.tmux.conf`:
-
-```bash
-# Custom keybinding (default: W)
-set -g @worktree-keybinding "T"
-
-# Custom worktree base path (default: ~/.tmux-worktree)
-set -g @worktree-path "~/my-worktrees"
-
-# Items per page (default: 15)
-set -g @worktree-items-per-page "20"
-
-# Fetch timeout in seconds (default: 30)
-set -g @worktree-fetch-timeout "60"
-```
-
-### Custom Keybindings
-
-All keys can be customized:
-
-```bash
-# Main menu keys
-set -g @worktree-key-list "l"        # List worktrees (default: l)
-set -g @worktree-key-add "a"         # Add worktree (default: a)
-set -g @worktree-key-remove "d"      # Remove worktree (default: d)
-set -g @worktree-key-quit "q"        # Quit (default: q)
-
-# Navigation keys
-set -g @worktree-key-next "j"        # Next page (default: i)
-set -g @worktree-key-prev "k"        # Previous page (default: o)
-set -g @worktree-key-back "Escape"   # Back (default: BSpace)
-
-# Action keys
-set -g @worktree-key-filter "/"      # Filter (default: f)
-set -g @worktree-key-clear-filter "x" # Clear filter (default: c)
-set -g @worktree-key-new "n"         # New branch (default: n)
-set -g @worktree-key-fetch "r"       # Fetch remote (default: r)
-```
-
-## How It Works
-
-### Worktree Storage
-
-Worktrees are organized by project name:
-
-```
-~/.tmux-worktree/
-├── my-project/
-│   ├── master/
-│   └── feature/login/
-├── other-project/
-│   └── bugfix/header/
-```
-
-When you remove a worktree, only the worktree directory is deleted. The git branch is always preserved - delete branches manually with `git branch -D` if needed.
-
-### Session Naming
-
-Sessions are named `{project}-{branch}` with `/` replaced by `-`.
-
-Example: Project `myapp` on branch `feature/login` creates session `myapp-feature-login`.
-
-## Troubleshooting
-
-### "display-menu" not found
-
-Ensure you have tmux 3.0 or newer:
-```bash
-tmux -V
-```
-
-### Fetch fails or times out
-
-Try fetching manually:
-```bash
-git fetch origin
-```
-
-On macOS, install coreutils for timeout support:
-```bash
-brew install coreutils
-```
-
-### Worktree creation fails
-
-Check if the branch already exists:
-```bash
-git branch -a | grep branch-name
-```
-
-### Plugin not loading
-
-Check if the plugin is active:
-```bash
-# Run health check
-~/.tmux/plugins/tmux-worktree/scripts/worktree_manager.sh health_check
-```
-
-### Keybinding doesn't work
-
-The default `prefix + W` may conflict with other plugins. Change it:
-```bash
-set -g @worktree-keybinding "T"
-```
-
 ## Uninstall
 
-1. Remove the plugin line from `~/.tmux.conf`
-2. Reload tmux config (`prefix + r`) or restart tmux
-
-Optionally remove managed worktrees:
-```bash
-rm -rf ~/.tmux-worktree
-```
-
-## Debug Mode
-
-Enable debug logging to troubleshoot issues:
-
-```bash
-set -g @worktree-debug "on"
-```
-
-Logs are written to `~/.tmux-worktree/.tmux-worktree.log`.
+Remove the plugin line from `~/.tmux.conf` and reload. Optionally delete worktrees: `rm -rf ~/.tmux-worktree`.
 
 ## License
 
