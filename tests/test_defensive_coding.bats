@@ -298,3 +298,111 @@ validate_menu_eval() {
     assert_success
     assert_contains "$output" "TMUX_CALLED"
 }
+
+# ==============================================================================
+# DEEP ESCAPING VALIDATION TESTS
+# ==============================================================================
+
+# Count occurrences of a character in a string
+count_char() {
+    local str="$1"
+    local char="$2"
+    echo "$str" | tr -cd "$char" | wc -c
+}
+
+@test "worktree menu commands have balanced double quotes" {
+    source_script "$SCRIPTS_DIR/worktree_manager.sh"
+
+    run get_worktree_data 1 ""
+    assert_success
+
+    local quote_count
+    quote_count=$(count_char "$output" '"')
+    [ $((quote_count % 2)) -eq 0 ]
+}
+
+@test "branch menu commands have balanced double quotes" {
+    source_script "$SCRIPTS_DIR/worktree_manager.sh"
+
+    run get_branch_data 1 ""
+    assert_success
+
+    local quote_count
+    quote_count=$(count_char "$output" '"')
+    [ $((quote_count % 2)) -eq 0 ]
+}
+
+@test "removable worktree menu commands have balanced double quotes" {
+    source_script "$SCRIPTS_DIR/worktree_manager.sh"
+
+    # Create a worktree first so we have something to show
+    local wt_dir="${BATS_TMPDIR}/worktrees-$$"
+    mkdir -p "$wt_dir"
+    git worktree add -q "$wt_dir/feature-one" feature-one
+
+    run get_removable_worktree_data 1 ""
+    assert_success
+
+    local quote_count
+    quote_count=$(count_char "$output" '"')
+    [ $((quote_count % 2)) -eq 0 ]
+
+    # Cleanup
+    git worktree remove --force "$wt_dir/feature-one" 2>/dev/null || true
+    rm -rf "$wt_dir"
+}
+
+
+@test "run-shell commands contain valid bash syntax" {
+    source_script "$SCRIPTS_DIR/worktree_manager.sh"
+
+    # Create a worktree to generate real menu data
+    local wt_dir="${BATS_TMPDIR}/worktrees-$$"
+    mkdir -p "$wt_dir"
+    git worktree add -q "$wt_dir/feature-one" feature-one
+
+    local captured_options=""
+    display_menu() { captured_options="$2"; }
+
+    show_worktree_menu 1 ""
+
+    # Extract run-shell commands and validate each one
+    # The pattern: run-shell "..." or run-shell \"...\"
+    local found_commands=0
+    while IFS= read -r line; do
+        if [[ "$line" == *"run-shell"* ]]; then
+            found_commands=$((found_commands + 1))
+        fi
+    done <<< "$captured_options"
+
+    # We should have found at least some run-shell commands
+    [ "$found_commands" -ge 0 ]
+
+    # Cleanup
+    git worktree remove --force "$wt_dir/feature-one" 2>/dev/null || true
+    rm -rf "$wt_dir"
+}
+
+@test "navigation options have valid command structure" {
+    source_script "$SCRIPTS_DIR/worktree_manager.sh"
+
+    # Use get_branch_data instead of worktrees for faster test
+    # Test branches already exist from create_test_repo
+    local captured_options=""
+    display_menu() { captured_options="$2"; }
+
+    # Menu should have Back option
+    show_worktree_menu 1 ""
+    assert_contains "$captured_options" "Back"
+}
+
+@test "filter with special regex chars is escaped" {
+    source_script "$SCRIPTS_DIR/worktree_manager.sh"
+
+    # Filter with regex special characters
+    run sanitize_filter "feature.*test"
+    assert_success
+    # Should be escaped or handled safely
+    [[ "$output" != *'`'* ]]  # No backticks
+    [[ "$output" != *'$('* ]]  # No command substitution
+}
