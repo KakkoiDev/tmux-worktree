@@ -139,3 +139,62 @@ assert_failure() {
         return 1
     fi
 }
+
+
+# ==============================================================================
+# WORKTREE LIFECYCLE HELPERS
+# ==============================================================================
+
+# Kill all test tmux sessions created during tests
+cleanup_test_sessions() {
+    tmux_run list-sessions -F '#{session_name}' 2>/dev/null | \
+        grep -E '^test-repo' | \
+        while read -r session; do
+            tmux_run kill-session -t "$session" 2>/dev/null || true
+        done
+}
+
+# Delete test branches (prefix: test-)
+cleanup_test_branches() {
+    git branch 2>/dev/null | grep "^  test-" | while read -r branch; do
+        git branch -D "${branch## }" 2>/dev/null || true
+    done
+}
+
+# Create worktree for testing (with guaranteed cleanup)
+create_test_worktree() {
+    local branch="$1"
+    local project_name
+    project_name=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)")
+    local wt_path="${WORKTREE_BASE:-$BATS_TMPDIR}/$project_name/$branch"
+    mkdir -p "$(dirname "$wt_path")"
+    git worktree add "$wt_path" -b "$branch" 2>/dev/null
+    echo "$wt_path"
+}
+
+# Remove test worktree and optionally its branch
+remove_test_worktree() {
+    local wt_path="$1"
+    local delete_branch="${2:-false}"
+    local branch
+
+    if [ "$delete_branch" = "true" ]; then
+        branch=$(git worktree list 2>/dev/null | grep "$wt_path" | awk '{print $NF}' | tr -d '[]')
+    fi
+
+    git worktree remove --force "$wt_path" 2>/dev/null || true
+
+    if [ "$delete_branch" = "true" ] && [ -n "$branch" ]; then
+        git branch -D "$branch" 2>/dev/null || true
+    fi
+}
+
+# Clean up all worktrees except the main repo
+cleanup_all_worktrees() {
+    local main_repo="$1"
+    git worktree list --porcelain 2>/dev/null | grep "^worktree " | cut -d' ' -f2 | while read -r wt; do
+        if [ "$wt" != "$main_repo" ]; then
+            git worktree remove --force "$wt" 2>/dev/null || true
+        fi
+    done
+}
