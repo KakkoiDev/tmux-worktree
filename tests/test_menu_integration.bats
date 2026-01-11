@@ -7,12 +7,23 @@ load 'test_helper'
 # Global to capture menu options
 CAPTURED_MENU_OPTIONS=""
 
+setup_file() {
+    export SHARED_REPO_DIR
+    SHARED_REPO_DIR=$(create_shared_repo)
+    cd "$SHARED_REPO_DIR"
+    start_tmux_server
+}
+
+teardown_file() {
+    stop_tmux_server
+    cleanup_shared_repo
+}
+
 setup() {
+    reset_shared_repo
     source_script "$SCRIPTS_DIR/helpers.sh"
     source_script "$SCRIPTS_DIR/filter.sh"
-    TEST_REPO_DIR=$(create_test_repo)
     cd "$TEST_REPO_DIR" || exit 1
-    start_tmux_server
     load_config
     source_script "$SCRIPTS_DIR/worktree_manager.sh"
 
@@ -23,8 +34,6 @@ setup() {
 }
 
 teardown() {
-    stop_tmux_server
-    cleanup_test_repo
     CAPTURED_MENU_OPTIONS=""
 }
 

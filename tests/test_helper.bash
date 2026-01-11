@@ -13,10 +13,14 @@ export SCRIPTS_DIR="${PLUGIN_DIR}/scripts"
 export FIXTURES_DIR="${BATS_TEST_DIRNAME}/fixtures"
 export TEST_REPO_DIR=""
 
+# Shared repo for faster tests (created once per file)
+export SHARED_REPO_DIR=""
+
 # Start isolated tmux server for testing
 start_tmux_server() {
     tmux -L "$TMUX_SOCKET" kill-server 2>/dev/null || true
-    tmux -L "$TMUX_SOCKET" new-session -d -s "test-session" -c "$TEST_REPO_DIR"
+    local start_dir="${TEST_REPO_DIR:-${SHARED_REPO_DIR:-$PWD}}"
+    tmux -L "$TMUX_SOCKET" new-session -d -s "test-session" -c "$start_dir"
 }
 
 # Stop isolated tmux server
@@ -42,33 +46,90 @@ tmux_get_option() {
     tmux_run show-option -gqv "$option"
 }
 
-# Create a temporary git repository for testing
-create_test_repo() {
-    TEST_REPO_DIR=$(mktemp -d "${BATS_TMPDIR}/test-repo.XXXXXX")
-    cd "$TEST_REPO_DIR" || return 1
-    # Use consistent branch name regardless of system default
+# ==============================================================================
+# SHARED REPO (create once per test file for speed)
+# ==============================================================================
+
+# File to persist shared repo path across subshells
+_shared_repo_file() {
+    echo "${BATS_FILE_TMPDIR:-$BATS_TMPDIR}/.shared_repo_path"
+}
+
+# Create shared repo - call from setup_file()
+create_shared_repo() {
+    SHARED_REPO_DIR=$(mktemp -d "${BATS_TMPDIR}/shared-repo.XXXXXX")
+    echo "$SHARED_REPO_DIR" > "$(_shared_repo_file)"
+
+    cd "$SHARED_REPO_DIR" || return 1
     git init -q --initial-branch=master
     git config user.email "test@test.com"
     git config user.name "Test User"
 
-    # Create initial commit
     echo "initial" > README.md
     git add README.md
     git commit -q -m "Initial commit"
 
-    # Create some test branches
     git branch feature-one
     git branch feature-two
     git branch bugfix-123
 
-    echo "$TEST_REPO_DIR"
+    echo "$SHARED_REPO_DIR"
 }
 
-# Cleanup test repository
-cleanup_test_repo() {
-    if [ -n "$TEST_REPO_DIR" ] && [ -d "$TEST_REPO_DIR" ]; then
-        rm -rf "$TEST_REPO_DIR"
+# Reset shared repo to clean state - call from setup()
+# Base branches: master, feature-one, feature-two, bugfix-123
+reset_shared_repo() {
+    # Read from file if variable not set (bats subshell issue)
+    if [ -z "$SHARED_REPO_DIR" ] && [ -f "$(_shared_repo_file)" ]; then
+        SHARED_REPO_DIR=$(cat "$(_shared_repo_file)")
     fi
+    [ -z "$SHARED_REPO_DIR" ] && return 1
+    [ ! -d "$SHARED_REPO_DIR" ] && return 1
+
+    cd "$SHARED_REPO_DIR" || return 1
+
+    # Quick check: only clean if there are extra worktrees
+    local wt_count
+    wt_count=$(git worktree list 2>/dev/null | wc -l)
+    if [ "$wt_count" -gt 1 ]; then
+        git worktree list --porcelain 2>/dev/null | grep "^worktree " | cut -d' ' -f2 | while read -r wt; do
+            [ "$wt" != "$SHARED_REPO_DIR" ] && git worktree remove --force "$wt" 2>/dev/null || true
+        done
+    fi
+
+    # Quick check: only clean branches if more than base 4
+    local branch_count
+    branch_count=$(git branch 2>/dev/null | wc -l)
+    if [ "$branch_count" -gt 4 ]; then
+        git checkout -q master 2>/dev/null || true
+        # Delete non-base branches in one pass
+        git for-each-ref --format='%(refname:short)' refs/heads/ | while read -r branch; do
+            case "$branch" in
+                master|feature-one|feature-two|bugfix-123) ;;
+                *) git branch -D "$branch" 2>/dev/null || true ;;
+            esac
+        done
+    fi
+
+    git checkout -q master 2>/dev/null || true
+    TEST_REPO_DIR="$SHARED_REPO_DIR"
+}
+
+# Cleanup shared repo - call from teardown_file()
+cleanup_shared_repo() {
+    # Read from file if variable not set
+    if [ -z "$SHARED_REPO_DIR" ] && [ -f "$(_shared_repo_file)" ]; then
+        SHARED_REPO_DIR=$(cat "$(_shared_repo_file)")
+    fi
+
+    if [ -n "$SHARED_REPO_DIR" ] && [ -d "$SHARED_REPO_DIR" ]; then
+        cd "$SHARED_REPO_DIR" 2>/dev/null && \
+        git worktree list --porcelain 2>/dev/null | grep "^worktree " | cut -d' ' -f2 | while read -r wt; do
+            [ "$wt" != "$SHARED_REPO_DIR" ] && git worktree remove --force "$wt" 2>/dev/null || true
+        done
+        rm -rf "$SHARED_REPO_DIR"
+    fi
+    rm -f "$(_shared_repo_file)" 2>/dev/null || true
 }
 
 # Source a script and capture if it loads without error

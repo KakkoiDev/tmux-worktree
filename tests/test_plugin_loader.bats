@@ -3,14 +3,25 @@
 
 load test_helper
 
-setup() {
-    TEST_REPO_DIR=$(create_test_repo)
+setup_file() {
+    export SHARED_REPO_DIR
+    SHARED_REPO_DIR=$(create_shared_repo)
+    cd "$SHARED_REPO_DIR"
     start_tmux_server
 }
 
-teardown() {
+teardown_file() {
     stop_tmux_server
-    cleanup_test_repo
+    cleanup_shared_repo
+}
+
+setup() {
+    reset_shared_repo
+    cd "$TEST_REPO_DIR"
+}
+
+teardown() {
+    :
 }
 
 # ==============================================================================
@@ -123,7 +134,7 @@ teardown() {
 
     tmux_set_option "@worktree-items-per-page" "abc"
 
-    load_config
+    reload_config  # Clear cache to pick up new value
     assert_equal "15" "$ITEMS_PER_PAGE"
 }
 
@@ -132,7 +143,7 @@ teardown() {
 
     tmux_set_option "@worktree-items-per-page" "0"
 
-    load_config
+    reload_config  # Clear cache to pick up new value
     assert_equal "15" "$ITEMS_PER_PAGE"
 }
 
@@ -141,7 +152,7 @@ teardown() {
 
     tmux_set_option "@worktree-items-per-page" "-5"
 
-    load_config
+    reload_config  # Clear cache to pick up new value
     assert_equal "15" "$ITEMS_PER_PAGE"
 }
 
@@ -150,7 +161,7 @@ teardown() {
 
     tmux_set_option "@worktree-fetch-timeout" "not-a-number"
 
-    load_config
+    reload_config  # Clear cache to pick up new value
     assert_equal "30" "$FETCH_TIMEOUT"
 }
 

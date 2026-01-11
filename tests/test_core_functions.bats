@@ -3,17 +3,27 @@
 
 load test_helper
 
-setup() {
-    TEST_REPO_DIR=$(create_test_repo)
-    cd "$TEST_REPO_DIR"
+setup_file() {
+    export SHARED_REPO_DIR
+    SHARED_REPO_DIR=$(create_shared_repo)
+    cd "$SHARED_REPO_DIR"
     start_tmux_server
+}
+
+teardown_file() {
+    stop_tmux_server
+    cleanup_shared_repo
+}
+
+setup() {
+    reset_shared_repo
+    cd "$TEST_REPO_DIR"
     source "$SCRIPTS_DIR/helpers.sh"
     load_config
 }
 
 teardown() {
-    stop_tmux_server
-    cleanup_test_repo
+    :
 }
 
 # ==============================================================================
@@ -25,8 +35,8 @@ teardown() {
 
     run get_project_name
     assert_success
-    # Test repo dir is like /tmp/test-repo.XXXXXX
-    assert_contains "$output" "test-repo"
+    # Shared repo dir is like /tmp/shared-repo.XXXXXX
+    assert_contains "$output" "shared-repo"
 }
 
 @test "get_project_name works from subdirectory" {
@@ -37,7 +47,7 @@ teardown() {
 
     run get_project_name
     assert_success
-    assert_contains "$output" "test-repo"
+    assert_contains "$output" "shared-repo"
 }
 
 # ==============================================================================

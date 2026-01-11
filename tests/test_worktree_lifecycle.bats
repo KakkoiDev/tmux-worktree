@@ -4,12 +4,24 @@
 
 load 'test_helper'
 
+# Create shared repo once per file (much faster than per-test)
+setup_file() {
+    export SHARED_REPO_DIR
+    SHARED_REPO_DIR=$(create_shared_repo)
+    cd "$SHARED_REPO_DIR"
+    start_tmux_server
+}
+
+teardown_file() {
+    stop_tmux_server
+    cleanup_shared_repo
+}
+
 setup() {
+    reset_shared_repo
     source_script "$SCRIPTS_DIR/helpers.sh"
     source_script "$SCRIPTS_DIR/filter.sh"
-    TEST_REPO_DIR=$(create_test_repo)
     cd "$TEST_REPO_DIR" || exit 1
-    start_tmux_server
     load_config
     source_script "$SCRIPTS_DIR/worktree_manager.sh"
 
@@ -19,7 +31,7 @@ setup() {
 }
 
 teardown() {
-    # Clean up all worktrees except main repo
+    # Clean up worktrees created during test
     git worktree list --porcelain 2>/dev/null | grep "^worktree " | cut -d' ' -f2 | while read -r wt; do
         [ "$wt" != "$TEST_REPO_DIR" ] && git worktree remove --force "$wt" 2>/dev/null || true
     done
@@ -28,10 +40,11 @@ teardown() {
     git branch 2>/dev/null | grep "^  test-" | while read -r branch; do
         git branch -D "${branch## }" 2>/dev/null || true
     done
+    git branch 2>/dev/null | grep "^  feature/test-" | while read -r branch; do
+        git branch -D "${branch## }" 2>/dev/null || true
+    done
 
-    stop_tmux_server
     rm -rf "$WORKTREE_BASE"
-    cleanup_test_repo
 }
 
 # ==============================================================================
