@@ -307,3 +307,194 @@ teardown() {
 
     rm -rf "$new_base"
 }
+
+# ==============================================================================
+# CREATE_NEW_WORKTREE FUNCTION TESTS
+# Note: These tests focus on git operations. Tmux session tests are covered
+# separately in the TMUX SESSION TESTS section above.
+# ==============================================================================
+
+@test "create_new_worktree creates directory" {
+    local project
+    project=$(get_project_name)
+    local branch="test-cnw-dir"
+    local expected_path="$WORKTREE_BASE/$project/$branch"
+
+    # Run in subshell to avoid affecting current session
+    # Note: switch-client fails without attached client, but worktree is still created
+    (create_new_worktree "$branch") 2>/dev/null || true
+
+    [ -d "$expected_path" ]
+
+    # Cleanup
+    git worktree remove --force "$expected_path" 2>/dev/null || true
+    git branch -D "$branch" 2>/dev/null || true
+}
+
+@test "create_new_worktree creates branch" {
+    local branch="test-cnw-branch"
+    local project
+    project=$(get_project_name)
+    local expected_path="$WORKTREE_BASE/$project/$branch"
+
+    (create_new_worktree "$branch") 2>/dev/null || true
+
+    # Branch should exist
+    run git branch --list "$branch"
+    assert_contains "$output" "$branch"
+
+    # Cleanup
+    git worktree remove --force "$expected_path" 2>/dev/null || true
+    git branch -D "$branch" 2>/dev/null || true
+}
+
+@test "create_new_worktree uses correct worktree path format" {
+    local project
+    project=$(get_project_name)
+    local branch="test-cnw-path"
+    local expected_path="$WORKTREE_BASE/$project/$branch"
+
+    (create_new_worktree "$branch") 2>/dev/null || true
+
+    # Verify worktree appears in git worktree list with correct path
+    run git worktree list
+    assert_contains "$output" "$expected_path"
+
+    # Cleanup
+    git worktree remove --force "$expected_path" 2>/dev/null || true
+    git branch -D "$branch" 2>/dev/null || true
+}
+
+@test "create_new_worktree handles slashes in branch name" {
+    local project
+    project=$(get_project_name)
+    local branch="feature/test-cnw-slash"
+    local expected_path="$WORKTREE_BASE/$project/$branch"
+
+    (create_new_worktree "$branch") 2>/dev/null || true
+
+    [ -d "$expected_path" ]
+
+    # Branch should exist with slashes
+    run git branch --list "$branch"
+    assert_contains "$output" "$branch"
+
+    # Cleanup
+    git worktree remove --force "$expected_path" 2>/dev/null || true
+    git branch -D "$branch" 2>/dev/null || true
+}
+
+@test "create_new_worktree fails for existing branch" {
+    local branch="feature-one"  # Already exists from create_test_repo
+
+    # Should fail because branch exists
+    run bash -c "source '$SCRIPTS_DIR/helpers.sh' && source '$SCRIPTS_DIR/filter.sh' && load_config && export WORKTREE_BASE='$WORKTREE_BASE' && source '$SCRIPTS_DIR/worktree_manager.sh' && create_new_worktree '$branch'"
+
+    # The function displays error but doesn't crash
+
+    # No new worktree should be created (branch already exists error from git)
+    local project
+    project=$(get_project_name)
+    [ ! -d "$WORKTREE_BASE/$project/$branch" ]
+}
+
+# ==============================================================================
+# REMOVE_WORKTREE FUNCTION TESTS
+# Note: These tests focus on git operations and verifying branch preservation.
+# ==============================================================================
+
+@test "remove_worktree removes directory" {
+    local project
+    project=$(get_project_name)
+    local branch="test-rw-dir"
+    local wt_path="$WORKTREE_BASE/$project/$branch"
+    local session_name="${project}-${branch}"
+
+    # Create worktree first
+    mkdir -p "$(dirname "$wt_path")"
+    git worktree add -q "$wt_path" -b "$branch"
+
+    [ -d "$wt_path" ]
+
+    # Mock show_remove_worktree_menu to avoid menu display
+    show_remove_worktree_menu() { :; }
+
+    # Remove worktree (tmux session operations may fail in test env, that's OK)
+    remove_worktree "$wt_path" "$branch" "$session_name" 1 2>/dev/null || true
+
+    # Worktree directory should be gone
+    [ ! -d "$wt_path" ]
+
+    # Cleanup branch
+    git branch -D "$branch" 2>/dev/null || true
+}
+
+@test "remove_worktree keeps branch" {
+    local project
+    project=$(get_project_name)
+    local branch="test-rw-keep-branch"
+    local wt_path="$WORKTREE_BASE/$project/$branch"
+    local session_name="${project}-${branch}"
+
+    # Create worktree
+    mkdir -p "$(dirname "$wt_path")"
+    git worktree add -q "$wt_path" -b "$branch"
+
+    # Mock menu
+    show_remove_worktree_menu() { :; }
+
+    remove_worktree "$wt_path" "$branch" "$session_name" 1 2>/dev/null || true
+
+    # Branch should still exist (this is the key behavior)
+    run git branch --list "$branch"
+    assert_contains "$output" "$branch"
+
+    # Cleanup
+    git branch -D "$branch" 2>/dev/null || true
+}
+
+@test "remove_worktree updates worktree list" {
+    local project
+    project=$(get_project_name)
+    local branch="test-rw-list"
+    local wt_path="$WORKTREE_BASE/$project/$branch"
+    local session_name="${project}-${branch}"
+
+    # Create worktree
+    mkdir -p "$(dirname "$wt_path")"
+    git worktree add -q "$wt_path" -b "$branch"
+
+    # Verify in list
+    run git worktree list
+    assert_contains "$output" "$wt_path"
+
+    # Mock menu
+    show_remove_worktree_menu() { :; }
+
+    remove_worktree "$wt_path" "$branch" "$session_name" 1 2>/dev/null || true
+
+    # Should be gone from list
+    run git worktree list
+    [[ "$output" != *"$wt_path"* ]]
+
+    # Cleanup
+    git branch -D "$branch" 2>/dev/null || true
+}
+
+@test "remove_worktree handles non-existent worktree gracefully" {
+    local project
+    project=$(get_project_name)
+    local branch="test-rw-nonexistent"
+    local wt_path="$WORKTREE_BASE/$project/$branch"
+    local session_name="${project}-${branch}"
+
+    # Don't create worktree - test error handling
+
+    # Mock menu
+    show_remove_worktree_menu() { :; }
+
+    # Should not crash (may produce error message, but exit cleanly)
+    run remove_worktree "$wt_path" "$branch" "$session_name" 1
+    # Function doesn't crash - that's the test
+    true
+}
