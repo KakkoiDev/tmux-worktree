@@ -2,7 +2,6 @@
 # ==============================================================================
 # TMUX WORKTREES - Core Worktree Manager
 # ==============================================================================
-# Migrated from standalone tmux_worktree.sh to TPM plugin architecture
 # Requires: bash 4.0+, git, tmux, timeout (coreutils)
 
 # Ensure PATH is set for git and other commands
