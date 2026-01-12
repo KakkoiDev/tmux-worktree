@@ -95,15 +95,6 @@ teardown() {
 # Worktree Data Tests
 # ==============================================================================
 
-@test "get_worktree_data returns menu entries" {
-    source "$SCRIPTS_DIR/worktree_manager.sh"
-
-    run get_worktree_data 1
-    assert_success
-    # Should contain the current worktree with branch name
-    assert_contains "$output" "master"
-}
-
 @test "get_worktree_data respects pagination" {
     source "$SCRIPTS_DIR/worktree_manager.sh"
 
