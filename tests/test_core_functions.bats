@@ -66,22 +66,25 @@ teardown() {
 @test "get_worktree_page_count calculates ceiling correctly" {
     source "$SCRIPTS_DIR/worktree_manager.sh"
 
+    # Use smaller page size for faster test (same pagination logic)
+    ITEMS_PER_PAGE=3
+
     # Create temp dir for worktrees
     local wt_dir="${TEST_REPO_DIR}-worktrees"
     mkdir -p "$wt_dir"
 
-    # Create 16 worktrees (should be 2 pages with 15 items per page)
-    for i in $(seq 1 16); do
+    # Create 4 worktrees (5 total with main = 2 pages with 3 items per page)
+    for i in $(seq 1 4); do
         git worktree add -q "$wt_dir/wt-$i" -b "branch-$i"
     done
 
     run get_worktree_page_count
     assert_success
-    # 17 worktrees (1 main + 16 created) = ceil(17/15) = 2
+    # 5 worktrees (1 main + 4 created) = ceil(5/3) = 2
     assert_equal "2" "$output"
 
     # Cleanup
-    for i in $(seq 1 16); do
+    for i in $(seq 1 4); do
         git worktree remove -f "$wt_dir/wt-$i" 2>/dev/null || true
     done
     rm -rf "$wt_dir"
@@ -128,27 +131,30 @@ teardown() {
 @test "get_worktree_data respects pagination" {
     source "$SCRIPTS_DIR/worktree_manager.sh"
 
+    # Use smaller page size for faster test (same pagination logic)
+    ITEMS_PER_PAGE=3
+
     # Create temp dir for worktrees (inside test repo parent for cleanup)
     local wt_dir="${TEST_REPO_DIR}-worktrees"
     mkdir -p "$wt_dir"
 
-    # Create 20 worktrees
-    for i in $(seq 1 20); do
+    # Create 4 worktrees (5 total = 2 pages with 3 items per page)
+    for i in $(seq 1 4); do
         git worktree add -q "$wt_dir/wt-$i" -b "branch-$i"
     done
 
-    # Page 1 should have items
+    # Page 1 should have 3 items
     run get_worktree_data 1
     assert_success
     [ -n "$output" ]
 
-    # Page 2 should also have items
+    # Page 2 should have 2 items
     run get_worktree_data 2
     assert_success
     [ -n "$output" ]
 
     # Cleanup worktrees
-    for i in $(seq 1 20); do
+    for i in $(seq 1 4); do
         git worktree remove -f "$wt_dir/wt-$i" 2>/dev/null || true
     done
     rm -rf "$wt_dir"
