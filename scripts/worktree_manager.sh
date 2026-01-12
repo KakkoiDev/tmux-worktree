@@ -384,7 +384,7 @@ get_removable_worktree_data() {
                         gsub("/", "-", session_name)
 
                         # Remove worktree only (branch is always kept)
-                        items[line_num] = "\"" branch "\" \"\" \"display-message \\\"Removing worktree...\\\" ; run-shell \\\". " script_path " && remove_worktree \\\\\\\"" full_path "\\\\\\\" \\\\\\\"" branch "\\\\\\\" \\\\\\\"" session_name "\\\\\\\" " current_page "\\\"\""
+                        items[line_num] = "\"" branch "\" \"\" \"display-message \\\"Removing worktree...\\\" ; run-shell \\\"'\"'" script_path "'\"' remove_worktree \\\\\\\"" full_path "\\\\\\\" \\\\\\\"" branch "\\\\\\\" \\\\\\\"" session_name "\\\\\\\" " current_page "\\\"\""
                     }
                 }
             }
@@ -402,7 +402,7 @@ get_removable_worktree_data() {
                         session_name = project "-detached-" head_sha
 
                         # Detached HEAD worktrees - remove worktree only
-                        items[line_num] = "\"" branch "\" \"\" \"display-message \\\"Removing worktree...\\\" ; run-shell \\\". " script_path " && remove_worktree \\\\\\\"" full_path "\\\\\\\" \\\\\\\"\\\\\\\" \\\\\\\"" session_name "\\\\\\\" " current_page "\\\"\""
+                        items[line_num] = "\"" branch "\" \"\" \"display-message \\\"Removing worktree...\\\" ; run-shell \\\"'\"'" script_path "'\"' remove_worktree \\\\\\\"" full_path "\\\\\\\" \\\\\\\"\\\\\\\" \\\\\\\"" session_name "\\\\\\\" " current_page "\\\"\""
                     }
                 }
             }
@@ -533,23 +533,23 @@ generate_nav_options() {
     # Previous page navigation (preserve filter and extra args)
     if [ "$page" -gt 1 ]; then
         if [ -n "$args_suffix" ]; then
-            nav_options="\"◀ Previous\" \"$KEY_PREV\" \"run-shell \\\". '$script_path' && $menu_function $((page - 1)) $args_suffix\\\"\" "
+            nav_options="\"◀ Previous\" \"$KEY_PREV\" \"run-shell \\\"'$script_path' $menu_function $((page - 1)) $args_suffix\\\"\" "
         else
-            nav_options="\"◀ Previous\" \"$KEY_PREV\" \"run-shell \\\". '$script_path' && $menu_function $((page - 1))\\\"\" "
+            nav_options="\"◀ Previous\" \"$KEY_PREV\" \"run-shell \\\"'$script_path' $menu_function $((page - 1))\\\"\" "
         fi
     fi
 
     # Next page navigation (preserve filter and extra args)
     if [ "$page" -lt "$total_pages" ]; then
         if [ -n "$args_suffix" ]; then
-            nav_options="${nav_options}\"Next ▶\" \"$KEY_NEXT\" \"run-shell \\\". '$script_path' && $menu_function $((page + 1)) $args_suffix\\\"\" "
+            nav_options="${nav_options}\"Next ▶\" \"$KEY_NEXT\" \"run-shell \\\"'$script_path' $menu_function $((page + 1)) $args_suffix\\\"\" "
         else
-            nav_options="${nav_options}\"Next ▶\" \"$KEY_NEXT\" \"run-shell \\\". '$script_path' && $menu_function $((page + 1))\\\"\" "
+            nav_options="${nav_options}\"Next ▶\" \"$KEY_NEXT\" \"run-shell \\\"'$script_path' $menu_function $((page + 1))\\\"\" "
         fi
     fi
 
     # Back to main menu
-    nav_options="${nav_options}\"← Back\" \"$KEY_BACK\" \"run-shell \\\". '$script_path' && tmux_worktrees_main\\\"\""
+    nav_options="${nav_options}\"← Back\" \"$KEY_BACK\" \"run-shell \\\"'$script_path' tmux_worktrees_main\\\"\""
 
     echo "$nav_options"
 }
@@ -592,12 +592,12 @@ show_worktree_menu() {
     [ -n "$filter" ] && title="$title - Filter: '$filter'"
 
     # Filter option (always present)
-    local filter_option="\"Filter\" \"$KEY_FILTER\" \"command-prompt -p 'Filter pattern:' 'run-shell \\\". $script_path && show_worktree_menu 1 %1\\\"'\""
+    local filter_option="\"Filter\" \"$KEY_FILTER\" \"command-prompt -p 'Filter pattern:' 'run-shell \\\"'$script_path' show_worktree_menu 1 %1\\\"'\""
 
     # Clear filter option (only when filter active)
     local clear_option=""
     if [ -n "$filter" ]; then
-        clear_option="\"Clear filter\" \"$KEY_CLEAR_FILTER\" \"run-shell \\\". '$script_path' && show_worktree_menu 1\\\"\""
+        clear_option="\"Clear filter\" \"$KEY_CLEAR_FILTER\" \"run-shell \\\"'$script_path' show_worktree_menu 1\\\"\""
     fi
 
     if [ -n "$worktree_items" ]; then
@@ -682,18 +682,18 @@ show_add_worktree_menu() {
     [ -n "$filter" ] && title="$title - Filter: '$filter'"
 
     # New branch option
-    local new_option="\"New\" \"$KEY_NEW\" \"command-prompt -p 'New branch name:' 'run-shell \\\". $script_path && create_new_worktree %1\\\"'\""
+    local new_option="\"New\" \"$KEY_NEW\" \"command-prompt -p 'New branch name:' 'run-shell \\\"'$script_path' create_new_worktree %1\\\"'\""
 
     # Fetch remote option - fetches and refreshes menu with remotes included
-    local fetch_option="\"Fetch remote\" \"$KEY_FETCH\" \"run-shell \\\". '$script_path' && fetch_remote_branches && show_add_worktree_menu 1 '$filter' 1\\\"\""
+    local fetch_option="\"Fetch remote\" \"$KEY_FETCH\" \"run-shell \\\"'$script_path' fetch_remote_branches && '$script_path' show_add_worktree_menu 1 '$filter' 1\\\"\""
 
     # Filter option (always present)
-    local filter_option="\"Filter\" \"$KEY_FILTER\" \"command-prompt -p 'Filter pattern:' 'run-shell \\\". $script_path && show_add_worktree_menu 1 %1 $include_remotes\\\"'\""
+    local filter_option="\"Filter\" \"$KEY_FILTER\" \"command-prompt -p 'Filter pattern:' 'run-shell \\\"'$script_path' show_add_worktree_menu 1 %1 $include_remotes\\\"'\""
 
     # Clear filter option (only when filter active)
     local clear_option=""
     if [ -n "$filter" ]; then
-        clear_option="\"Clear filter\" \"$KEY_CLEAR_FILTER\" \"run-shell \\\". '$script_path' && show_add_worktree_menu 1 '' $include_remotes\\\"\""
+        clear_option="\"Clear filter\" \"$KEY_CLEAR_FILTER\" \"run-shell \\\"'$script_path' show_add_worktree_menu 1 '' $include_remotes\\\"\""
     fi
 
     local all_options="$new_option $fetch_option $filter_option $clear_option $branch_items $nav_options"
@@ -727,12 +727,12 @@ show_remove_worktree_menu() {
     [ -n "$filter" ] && title="$title - Filter: '$filter'"
 
     # Filter option (always present)
-    local filter_option="\"Filter\" \"$KEY_FILTER\" \"command-prompt -p 'Filter pattern:' 'run-shell \\\". $script_path && show_remove_worktree_menu 1 %1\\\"'\""
+    local filter_option="\"Filter\" \"$KEY_FILTER\" \"command-prompt -p 'Filter pattern:' 'run-shell \\\"'$script_path' show_remove_worktree_menu 1 %1\\\"'\""
 
     # Clear filter option (only when filter active)
     local clear_option=""
     if [ -n "$filter" ]; then
-        clear_option="\"Clear filter\" \"$KEY_CLEAR_FILTER\" \"run-shell \\\". '$script_path' && show_remove_worktree_menu 1\\\"\""
+        clear_option="\"Clear filter\" \"$KEY_CLEAR_FILTER\" \"run-shell \\\"'$script_path' show_remove_worktree_menu 1\\\"\""
     fi
 
     if [ -n "$worktree_items" ]; then
@@ -760,9 +760,9 @@ tmux_worktrees_main() {
     fi
 
     local script_path="$SCRIPT_DIR/worktree_manager.sh"
-    local options='"List" "'"$KEY_LIST"'" "run-shell \". '"'"$script_path"'"' && show_worktree_menu\"" \
-    "Add" "'"$KEY_ADD"'" "run-shell \". '"'"$script_path"'"' && show_add_worktree_menu\"" \
-    "Remove" "'"$KEY_REMOVE"'" "run-shell \". '"'"$script_path"'"' && show_remove_worktree_menu\"" \
+    local options='"List" "'"$KEY_LIST"'" "run-shell \"'"'"$script_path"'"' show_worktree_menu\"" \
+    "Add" "'"$KEY_ADD"'" "run-shell \"'"'"$script_path"'"' show_add_worktree_menu\"" \
+    "Remove" "'"$KEY_REMOVE"'" "run-shell \"'"'"$script_path"'"' show_remove_worktree_menu\"" \
     "Quit" "'"$KEY_QUIT"'" ""'
 
     display_menu "Git Worktrees" "$options"
