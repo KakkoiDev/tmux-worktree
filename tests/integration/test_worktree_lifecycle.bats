@@ -522,3 +522,65 @@ teardown() {
     # Function doesn't crash - that's the test
     true
 }
+
+# ==============================================================================
+# DETACHED HEAD WORKTREE TESTS
+# ==============================================================================
+
+@test "detached HEAD worktree appears in worktree list" {
+    local project
+    project=$(get_project_name)
+    local commit_sha
+    commit_sha=$(git rev-parse HEAD)
+    local wt_dir="$WORKTREE_BASE/$project/detached-test"
+    mkdir -p "$(dirname "$wt_dir")"
+
+    # Create detached HEAD worktree
+    git worktree add --detach "$wt_dir" "$commit_sha"
+
+    # Verify it appears in git worktree list
+    run git worktree list
+    assert_success
+    assert_contains "$output" "detached"
+
+    # Cleanup
+    git worktree remove --force "$wt_dir"
+}
+
+@test "get_worktree_data includes detached HEAD worktrees" {
+    local project
+    project=$(get_project_name)
+    local commit_sha
+    commit_sha=$(git rev-parse HEAD)
+    local wt_dir="$WORKTREE_BASE/$project/detached-data"
+    mkdir -p "$(dirname "$wt_dir")"
+
+    git worktree add --detach "$wt_dir" "$commit_sha"
+
+    run get_worktree_data 1 ""
+    assert_success
+    # Output should include the detached worktree path
+    assert_contains "$output" "detached-data"
+
+    # Cleanup
+    git worktree remove --force "$wt_dir"
+}
+
+@test "get_removable_worktree_data includes detached HEAD worktrees" {
+    local project
+    project=$(get_project_name)
+    local commit_sha
+    commit_sha=$(git rev-parse HEAD)
+    local wt_dir="$WORKTREE_BASE/$project/detached-remove"
+    mkdir -p "$(dirname "$wt_dir")"
+
+    git worktree add --detach "$wt_dir" "$commit_sha"
+
+    run get_removable_worktree_data 1 ""
+    assert_success
+    # Output should include the detached worktree
+    assert_contains "$output" "detached-remove"
+
+    # Cleanup
+    git worktree remove --force "$wt_dir"
+}
