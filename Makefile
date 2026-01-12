@@ -39,10 +39,18 @@ test-integration:
 	@echo "Running integration tests..."
 	@$(BATS) $(INTEGRATION_TESTS)
 
-# Run all tests in parallel
+# Run all tests in parallel (requires GNU parallel)
 test-parallel:
-	@echo "Running all tests in parallel ($(JOBS) jobs)..."
-	@$(BATS) --jobs $(JOBS) $(ALL_TESTS)
+	@if ! command -v parallel >/dev/null 2>&1; then \
+		echo "Warning: GNU parallel not found. Install with:"; \
+		echo "  Ubuntu/Debian: sudo apt-get install parallel"; \
+		echo "  macOS: brew install parallel"; \
+		echo "Running tests sequentially instead..."; \
+		$(BATS) $(ALL_TESTS); \
+	else \
+		echo "Running all tests in parallel ($(JOBS) jobs)..."; \
+		$(BATS) --jobs $(JOBS) $(ALL_TESTS); \
+	fi
 
 # Run unit tests in parallel (fastest)
 test-unit-parallel:

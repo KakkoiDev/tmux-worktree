@@ -57,7 +57,13 @@ make test-verbose
 
 ### Parallel Execution
 
+Parallel execution requires [GNU parallel](https://www.gnu.org/software/parallel/):
+
 ```bash
+# Install GNU parallel
+sudo apt-get install parallel  # Ubuntu/Debian
+brew install parallel          # macOS
+
 # Auto-detect CPU count
 make test-parallel
 
