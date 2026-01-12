@@ -27,30 +27,6 @@ teardown() {
 }
 
 # ==============================================================================
-# Project Name Tests
-# ==============================================================================
-
-@test "get_project_name returns repository directory name" {
-    source "$SCRIPTS_DIR/worktree_manager.sh"
-
-    run get_project_name
-    assert_success
-    # Shared repo dir is like /tmp/shared-repo.XXXXXX
-    assert_contains "$output" "shared-repo"
-}
-
-@test "get_project_name works from subdirectory" {
-    source "$SCRIPTS_DIR/worktree_manager.sh"
-
-    mkdir -p subdir/nested
-    cd subdir/nested
-
-    run get_project_name
-    assert_success
-    assert_contains "$output" "shared-repo"
-}
-
-# ==============================================================================
 # Page Calculation Tests
 # ==============================================================================
 

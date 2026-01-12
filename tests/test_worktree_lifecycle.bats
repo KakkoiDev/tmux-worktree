@@ -56,6 +56,17 @@ teardown() {
     assert_success
     # Should only contain alphanumeric, dash, underscore, dot
     [[ "$output" =~ ^[a-zA-Z0-9._-]+$ ]]
+    # Should contain part of the repo directory name
+    assert_contains "$output" "shared-repo"
+}
+
+@test "get_project_name works from subdirectory" {
+    mkdir -p subdir/nested
+    cd subdir/nested
+
+    run get_project_name
+    assert_success
+    assert_contains "$output" "shared-repo"
 }
 
 @test "get_project_name works from worktree" {
