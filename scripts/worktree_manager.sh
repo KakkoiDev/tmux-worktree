@@ -31,6 +31,26 @@ if [[ ! "$WORKTREE_BASE" == /tmp/* ]]; then
 fi
 
 # ==============================================================================
+# PATTERN CONVERSION
+# ==============================================================================
+
+# Convert shell glob pattern to regex for awk matching
+# Converts: . -> \. (escape dots), * -> .* (any chars), ? -> . (single char)
+# Returns anchored regex: ^pattern$
+convert_glob_to_regex() {
+    local pattern="$1"
+    if [[ -z "$pattern" ]]; then
+        echo ""
+        return
+    fi
+    # Escape dots, convert wildcards, anchor pattern
+    pattern="${pattern//./\\.}"
+    pattern="${pattern//\*/.*}"
+    pattern="${pattern//\?/.}"
+    echo "^${pattern}$"
+}
+
+# ==============================================================================
 # REMOTE BRANCH FETCHING
 # ==============================================================================
 
@@ -131,15 +151,17 @@ remove_worktree() {
     show_remove_worktree_menu "$current_page"
 }
 
-# Get git worktree data with pagination, optional filter, AND page count in single call
+# Get git worktree data with pagination and optional filter
 # Output format: first line = total_pages, remaining lines = menu items (space-separated on one line)
-get_worktree_data_with_count() {
+get_worktree_data() {
     local page
     page=$(validate_page "${1:-1}")
     local filter
     filter=$(limit_filter "${2:-}")
     local sanitized_filter
     sanitized_filter=$(sanitize_filter "$filter")
+    local regex_filter
+    regex_filter=$(convert_glob_to_regex "$sanitized_filter")
     local start_line=$(( (page - 1) * ITEMS_PER_PAGE + 1 ))
     local end_line=$(( page * ITEMS_PER_PAGE ))
 
@@ -148,18 +170,11 @@ get_worktree_data_with_count() {
 
     # Log worktree paths to debug file
     if [ "$DEBUG" = "on" ]; then
-        debug_log "get_worktree_data_with_count: listing worktrees for page $page"
+        debug_log "get_worktree_data: listing worktrees for page $page"
     fi
 
-    LC_ALL=C git worktree list --porcelain | LC_ALL=C awk -v project="$project_name" -v filter="$sanitized_filter" -v items_per_page="$ITEMS_PER_PAGE" -v start="$start_line" -v end="$end_line" '
+    LC_ALL=C git worktree list --porcelain | LC_ALL=C awk -v project="$project_name" -v filter="$regex_filter" -v items_per_page="$ITEMS_PER_PAGE" -v start="$start_line" -v end="$end_line" '
         BEGIN {
-            # Convert wildcard to regex
-            if (filter != "") {
-                gsub(/\./, "\\.", filter)  # Escape literal dots first
-                gsub(/\*/, ".*", filter)   # Then convert wildcards
-                gsub(/\?/, ".", filter)
-                filter = "^" filter "$"
-            }
             count = 0
             line_num = 0
         }
@@ -212,16 +227,9 @@ get_worktree_data_with_count() {
     '
 }
 
-# Backward-compatible wrapper: returns just menu items (no count)
-get_worktree_data() {
-    local output
-    output=$(get_worktree_data_with_count "$@")
-    echo "$output" | tail -n +2
-}
-
-# Get git branch data with pagination, optional filter, remote branches, AND page count in single call
+# Get git branch data with pagination, optional filter, and remote branches
 # Output format: first line = total_pages, remaining lines = menu items (space-separated on one line)
-get_branch_data_with_count() {
+get_branch_data() {
     local page
     page=$(validate_page "${1:-1}")
     local filter
@@ -229,6 +237,8 @@ get_branch_data_with_count() {
     local include_remotes=${3:-0}
     local sanitized_filter
     sanitized_filter=$(sanitize_filter "$filter")
+    local regex_filter
+    regex_filter=$(convert_glob_to_regex "$sanitized_filter")
     local start_line=$(( (page - 1) * ITEMS_PER_PAGE + 1 ))
     local end_line=$(( page * ITEMS_PER_PAGE ))
 
@@ -247,14 +257,8 @@ get_branch_data_with_count() {
     local existing_worktrees
     existing_worktrees=$(git worktree list --porcelain 2>/dev/null | grep '^branch refs/heads/' | sed 's|^branch refs/heads/||' | tr '\n' '|' | sed 's/|$//')
 
-    eval "$branch_cmd" | awk -v base="$WORKTREE_BASE" -v project="$project_name" -v filter="$sanitized_filter" -v items_per_page="$ITEMS_PER_PAGE" -v start="$start_line" -v end="$end_line" -v existing_wt="$existing_worktrees" '
+    eval "$branch_cmd" | awk -v base="$WORKTREE_BASE" -v project="$project_name" -v filter="$regex_filter" -v items_per_page="$ITEMS_PER_PAGE" -v start="$start_line" -v end="$end_line" -v existing_wt="$existing_worktrees" '
         BEGIN {
-            if (filter != "") {
-                gsub(/\./, "\\.", filter)  # Escape literal dots first
-                gsub(/\*/, ".*", filter)   # Then convert wildcards
-                gsub(/\?/, ".", filter)
-                filter = "^" filter "$"
-            }
             count = 0
             line_num = 0
             # Parse existing worktrees into an array
@@ -330,22 +334,17 @@ get_branch_data_with_count() {
     '
 }
 
-# Backward-compatible wrapper: returns just menu items (no count)
-get_branch_data() {
-    local output
-    output=$(get_branch_data_with_count "$@")
-    echo "$output" | tail -n +2
-}
-
-# Get removable worktree data with pagination, optional filter, AND page count in single call
+# Get removable worktree data with pagination and optional filter
 # Output format: first line = total_pages, remaining lines = menu items (space-separated on one line)
-get_removable_worktree_data_with_count() {
+get_removable_worktree_data() {
     local page
     page=$(validate_page "${1:-1}")
     local filter
     filter=$(limit_filter "${2:-}")
     local sanitized_filter
     sanitized_filter=$(sanitize_filter "$filter")
+    local regex_filter
+    regex_filter=$(convert_glob_to_regex "$sanitized_filter")
     local start_line=$(( (page - 1) * ITEMS_PER_PAGE + 1 ))
     local end_line=$(( page * ITEMS_PER_PAGE ))
 
@@ -355,17 +354,11 @@ get_removable_worktree_data_with_count() {
 
     # Log worktree paths to debug file
     if [ "$DEBUG" = "on" ]; then
-        debug_log "get_removable_worktree_data_with_count: listing worktrees for page $page"
+        debug_log "get_removable_worktree_data: listing worktrees for page $page"
     fi
 
-    LC_ALL=C git worktree list --porcelain | LC_ALL=C awk -v current_dir="$(pwd)" -v script_path="$script_path" -v current_page="$page" -v project="$project_name" -v filter="$sanitized_filter" -v items_per_page="$ITEMS_PER_PAGE" -v start="$start_line" -v end="$end_line" '
+    LC_ALL=C git worktree list --porcelain | LC_ALL=C awk -v current_dir="$(pwd)" -v script_path="$script_path" -v current_page="$page" -v project="$project_name" -v filter="$regex_filter" -v items_per_page="$ITEMS_PER_PAGE" -v start="$start_line" -v end="$end_line" '
         BEGIN {
-            if (filter != "") {
-                gsub(/\./, "\\.", filter)  # Escape literal dots first
-                gsub(/\*/, ".*", filter)   # Then convert wildcards
-                gsub(/\?/, ".", filter)
-                filter = "^" filter "$"
-            }
             count = 0
             line_num = 0
         }
@@ -429,13 +422,6 @@ get_removable_worktree_data_with_count() {
     '
 }
 
-# Backward-compatible wrapper: returns just menu items (no count)
-get_removable_worktree_data() {
-    local output
-    output=$(get_removable_worktree_data_with_count "$@")
-    echo "$output" | tail -n +2
-}
-
 # ==============================================================================
 # PAGE CALCULATION FUNCTIONS
 # ==============================================================================
@@ -444,16 +430,10 @@ get_worktree_page_count() {
     local filter=${1:-}
     local sanitized_filter
     sanitized_filter=$(sanitize_filter "$filter")
+    local regex_filter
+    regex_filter=$(convert_glob_to_regex "$sanitized_filter")
     local total
-    total=$(LC_ALL=C git worktree list --porcelain | LC_ALL=C awk -v filter="$sanitized_filter" '
-        BEGIN {
-            if (filter != "") {
-                gsub(/\./, "\\.", filter)  # Escape literal dots first
-                gsub(/\*/, ".*", filter)   # Then convert wildcards
-                gsub(/\?/, ".", filter)
-                filter = "^" filter "$"
-            }
-        }
+    total=$(LC_ALL=C git worktree list --porcelain | LC_ALL=C awk -v filter="$regex_filter" '
         /^worktree/ { path = $2 }
         /^HEAD/ { head_sha = substr($2,1,7) }
         /^branch/ {
@@ -475,6 +455,8 @@ get_branch_page_count() {
     local include_remotes=${2:-0}
     local sanitized_filter
     sanitized_filter=$(sanitize_filter "$filter")
+    local regex_filter
+    regex_filter=$(convert_glob_to_regex "$sanitized_filter")
 
     # Build branch command based on include_remotes
     local branch_cmd="git branch --format='%(refname:short)'"
@@ -483,15 +465,7 @@ get_branch_page_count() {
     fi
 
     local total
-    total=$(eval "$branch_cmd" | awk -v filter="$sanitized_filter" '
-        BEGIN {
-            if (filter != "") {
-                gsub(/\./, "\\.", filter)  # Escape literal dots first
-                gsub(/\*/, ".*", filter)   # Then convert wildcards
-                gsub(/\?/, ".", filter)
-                filter = "^" filter "$"
-            }
-        }
+    total=$(eval "$branch_cmd" | awk -v filter="$regex_filter" '
         {
             branch = $0
             # For remote branches, match against local part
@@ -511,16 +485,10 @@ get_removable_worktree_page_count() {
     local filter=${1:-}
     local sanitized_filter
     sanitized_filter=$(sanitize_filter "$filter")
+    local regex_filter
+    regex_filter=$(convert_glob_to_regex "$sanitized_filter")
     local total
-    total=$(LC_ALL=C git worktree list --porcelain | LC_ALL=C awk -v current_dir="$(pwd)" -v filter="$sanitized_filter" '
-        BEGIN {
-            if (filter != "") {
-                gsub(/\./, "\\.", filter)  # Escape literal dots first
-                gsub(/\*/, ".*", filter)   # Then convert wildcards
-                gsub(/\?/, ".", filter)
-                filter = "^" filter "$"
-            }
-        }
+    total=$(LC_ALL=C git worktree list --porcelain | LC_ALL=C awk -v current_dir="$(pwd)" -v filter="$regex_filter" '
         /^worktree/ { path = $2 }
         /^HEAD/ { head_sha = substr($2,1,7) }
         /^branch/ {
@@ -608,7 +576,7 @@ show_worktree_menu() {
 
     # Single combined call for count + data (performance optimization)
     local combined_output
-    combined_output=$(get_worktree_data_with_count "$page" "$filter")
+    combined_output=$(get_worktree_data "$page" "$filter")
     local total_pages
     total_pages=$(echo "$combined_output" | head -1)
     local worktree_items
@@ -697,7 +665,7 @@ show_add_worktree_menu() {
 
     # Single combined call for count + data (performance optimization)
     local combined_output
-    combined_output=$(get_branch_data_with_count "$page" "$filter" "$include_remotes")
+    combined_output=$(get_branch_data "$page" "$filter" "$include_remotes")
     local total_pages
     total_pages=$(echo "$combined_output" | head -1)
     local branch_items
@@ -743,7 +711,7 @@ show_remove_worktree_menu() {
 
     # Single combined call for count + data (performance optimization)
     local combined_output
-    combined_output=$(get_removable_worktree_data_with_count "$page" "$filter")
+    combined_output=$(get_removable_worktree_data "$page" "$filter")
     local total_pages
     total_pages=$(echo "$combined_output" | head -1)
     local worktree_items
