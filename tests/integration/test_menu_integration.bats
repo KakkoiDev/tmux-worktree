@@ -30,7 +30,10 @@ setup() {
     # CRITICAL: Set WORKTREE_BASE AFTER load_config because load_config overwrites it
     init_test_worktree_base
 
-    # Override display_menu to capture instead of display
+    # IMPORTANT: Mock display_menu to prevent opening real tmux menus.
+    # Without this mock, tmux display-menu would block test execution
+    # and require manual Escape key press to continue.
+    # See CONTRIBUTING.md "Testing Menu Functions" for details.
     display_menu() {
         CAPTURED_MENU_OPTIONS="$2"
     }
