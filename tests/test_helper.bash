@@ -5,8 +5,9 @@
 export TMUX_SOCKET="test-worktrees"
 export TMUX_TMPDIR="${BATS_TMPDIR:-/tmp}"
 
-# Plugin paths (set relative to test file location)
-export PLUGIN_DIR="${BATS_TEST_DIRNAME}/.."
+# Plugin paths (set relative to test_helper.bash location, not test file)
+_HELPER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export PLUGIN_DIR="${_HELPER_DIR}/.."
 export SCRIPTS_DIR="${PLUGIN_DIR}/scripts"
 
 # Test fixture paths

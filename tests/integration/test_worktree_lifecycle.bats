@@ -2,7 +2,7 @@
 # Tests for worktree creation and removal operations
 # Tests git worktree operations directly, not via menu interaction
 
-load 'test_helper'
+load '../test_helper'
 
 # Create shared repo once per file (much faster than per-test)
 setup_file() {

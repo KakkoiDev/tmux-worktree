@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 # Tests for filter functionality
 
-load test_helper
+load '../test_helper'
 
 setup_file() {
     export SHARED_REPO_DIR

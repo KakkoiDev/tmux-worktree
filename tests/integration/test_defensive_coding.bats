@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 # Tests for defensive coding - input validation, edge cases, boundary conditions
 
-load 'test_helper'
+load '../test_helper'
 
 setup_file() {
     export SHARED_REPO_DIR

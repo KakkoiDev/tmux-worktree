@@ -2,7 +2,7 @@
 # Tests for menu command generation (using mocks, not actual menu display)
 # These tests verify that menu functions generate valid tmux commands
 
-load 'test_helper'
+load '../test_helper'
 
 # Global to capture menu options
 CAPTURED_MENU_OPTIONS=""
