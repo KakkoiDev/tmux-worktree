@@ -155,6 +155,28 @@ Located in `tests/integration/`. These tests:
 - **Mock tmux calls**: Override `display_menu()` or `tmux()` to capture output
 - **Test edge cases**: Empty inputs, invalid pages, special characters
 
+### Testing Menu Functions
+
+**Important**: Menu functions (`show_worktree_menu`, `show_add_worktree_menu`, `show_remove_worktree_menu`, `tmux_worktrees_main`) call `tmux display-menu` which opens a real tmux menu. Without mocking, these menus will block test execution and require manual closing.
+
+**Always mock `display_menu` when testing menu functions:**
+
+```bash
+@test "menu test example" {
+    source "$SCRIPTS_DIR/worktree_manager.sh"
+
+    # Mock display_menu to prevent opening real tmux menu
+    display_menu() {
+        echo "TITLE: $1"
+        echo "OPTIONS: $2"
+    }
+
+    run show_worktree_menu 1
+    assert_success
+    assert_contains "$output" "expected content"
+}
+```
+
 ## Available Assertions
 
 From `test_helper.bash`:
