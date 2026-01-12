@@ -207,12 +207,22 @@ assert_failure() {
 # WORKTREE LIFECYCLE HELPERS
 # ==============================================================================
 
-# Kill all test tmux sessions created during tests
+# Kill all test tmux sessions created during tests (on test server)
 cleanup_test_sessions() {
     tmux_run list-sessions -F '#{session_name}' 2>/dev/null | \
         grep -E '^test-repo' | \
         while read -r session; do
             tmux_run kill-session -t "$session" 2>/dev/null || true
+        done
+}
+
+# Kill sessions created by create_new_worktree on the MAIN tmux server
+# These are named like "shared-repo-XXXXX-branch-name"
+cleanup_main_server_test_sessions() {
+    tmux list-sessions -F '#{session_name}' 2>/dev/null | \
+        grep -E '^shared-repo' | \
+        while read -r session; do
+            tmux kill-session -t "$session" 2>/dev/null || true
         done
 }
 

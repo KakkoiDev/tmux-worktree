@@ -14,6 +14,7 @@ setup_file() {
 
 teardown_file() {
     stop_tmux_server
+    cleanup_main_server_test_sessions
     cleanup_shared_repo
 }
 

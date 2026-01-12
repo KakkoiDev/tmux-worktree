@@ -24,6 +24,18 @@ Thanks for your interest in contributing! This guide covers how to set up your d
 
 - **git** (any recent version)
 
+- **GNU parallel** (optional, for parallel test execution)
+  ```bash
+  # Ubuntu/Debian
+  sudo apt-get install parallel
+
+  # macOS
+  brew install parallel
+
+  # Verify installation
+  parallel --version
+  ```
+
 ## Running Tests
 
 ### Quick Commands
