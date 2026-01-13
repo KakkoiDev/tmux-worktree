@@ -241,7 +241,11 @@ get_branch_data_with_count() {
         branch_cmd="{ git branch --format='%(refname:short)'; git branch -r --format='%(refname:short)' | grep -v 'HEAD'; }"
     fi
 
-    eval "$branch_cmd" | awk -v base="$WORKTREE_BASE" -v project="$project_name" -v filter="$sanitized_filter" -v items_per_page="$ITEMS_PER_PAGE" -v start="$start_line" -v end="$end_line" '
+    # Get branches that already have worktrees (to filter them out)
+    local existing_worktrees
+    existing_worktrees=$(git worktree list --porcelain 2>/dev/null | grep '^branch refs/heads/' | sed 's|^branch refs/heads/||' | tr '\n' '|' | sed 's/|$//')
+
+    eval "$branch_cmd" | awk -v base="$WORKTREE_BASE" -v project="$project_name" -v filter="$sanitized_filter" -v items_per_page="$ITEMS_PER_PAGE" -v start="$start_line" -v end="$end_line" -v existing_wt="$existing_worktrees" '
         BEGIN {
             if (filter != "") {
                 gsub(/\./, "\\.", filter)  # Escape literal dots first
@@ -251,6 +255,11 @@ get_branch_data_with_count() {
             }
             count = 0
             line_num = 0
+            # Parse existing worktrees into an array
+            n = split(existing_wt, wt_arr, "|")
+            for (i = 1; i <= n; i++) {
+                has_worktree[wt_arr[i]] = 1
+            }
         }
         {
             branch = $0
@@ -269,6 +278,19 @@ get_branch_data_with_count() {
             if (is_remote) {
                 # Strip remote prefix for local branch name (origin/feat -> feat)
                 local_branch = substr(branch, index(branch, "/") + 1)
+                # Skip remote branches that already have a local counterpart
+                # (local branches are listed first, so they are already in the array)
+                if (local_branches[local_branch]) {
+                    next
+                }
+            } else {
+                # Store local branch names for later duplicate detection
+                local_branches[branch] = 1
+            }
+
+            # Skip branches that already have a worktree
+            if (has_worktree[local_branch]) {
+                next
             }
 
             # Apply filter (case-insensitive) - match against the branch name portion

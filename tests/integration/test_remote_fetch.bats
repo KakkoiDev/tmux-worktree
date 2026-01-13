@@ -153,7 +153,27 @@ teardown() {
 @test "remote branches are marked with visual indicator" {
     source "$SCRIPTS_DIR/worktree_manager.sh"
 
-    # Create a bare remote
+    # Create a bare remote with an extra branch that doesn't exist locally
+    local remote_dir="${TEST_REPO_DIR}-remote"
+    git clone --bare . "$remote_dir"
+    git -C "$remote_dir" branch remote-only-branch master
+    git remote add origin "$remote_dir"
+    git fetch origin
+
+    run get_branch_data 1 "" 1
+    assert_success
+    # Remote-only branches should have [remote] origin/ prefix in display
+    assert_contains "$output" "[remote] origin/remote-only-branch"
+
+    # Cleanup
+    git remote remove origin
+    rm -rf "$remote_dir"
+}
+
+@test "remote branches with local counterparts are filtered out" {
+    source "$SCRIPTS_DIR/worktree_manager.sh"
+
+    # Create a bare remote (has same branches as local)
     local remote_dir="${TEST_REPO_DIR}-remote"
     git clone --bare . "$remote_dir"
     git remote add origin "$remote_dir"
@@ -161,10 +181,65 @@ teardown() {
 
     run get_branch_data 1 "" 1
     assert_success
-    # Remote branches should have origin/ prefix in display
-    assert_contains "$output" "origin/"
+    # origin/master and origin/feature-* should NOT appear since local branches exist
+    refute_contains "$output" "origin/master"
+    refute_contains "$output" "origin/feature-one"
+    refute_contains "$output" "origin/feature-two"
+    # Local branches without worktrees should still appear
+    # Note: master is filtered because the main repo is on master (has worktree)
+    assert_contains "$output" '"feature-one"'
+    assert_contains "$output" '"feature-two"'
 
     # Cleanup
+    git remote remove origin
+    rm -rf "$remote_dir"
+}
+
+@test "local branches with existing worktrees are filtered out" {
+    source "$SCRIPTS_DIR/worktree_manager.sh"
+
+    # Create a worktree for feature-one branch
+    local wt_path="${WORKTREE_BASE}/$(get_project_name)/feature-one"
+    mkdir -p "$(dirname "$wt_path")"
+    git worktree add "$wt_path" feature-one
+
+    run get_branch_data 1 "" 0
+    assert_success
+    # feature-one should NOT appear since it has a worktree
+    refute_contains "$output" '"feature-one"'
+    # master is also filtered (main repo is on master)
+    refute_contains "$output" '"master"'
+    # Other branches without worktrees should still appear
+    assert_contains "$output" '"feature-two"'
+    assert_contains "$output" '"bugfix-123"'
+
+    # Cleanup
+    git worktree remove "$wt_path" --force
+}
+
+@test "remote branches with existing worktrees are filtered out" {
+    source "$SCRIPTS_DIR/worktree_manager.sh"
+
+    # Create a bare remote with an extra branch
+    local remote_dir="${TEST_REPO_DIR}-remote"
+    git clone --bare . "$remote_dir"
+    git -C "$remote_dir" branch remote-only-branch master
+    git remote add origin "$remote_dir"
+    git fetch origin
+
+    # Create a worktree for remote-only-branch (which creates local tracking branch)
+    local wt_path="${WORKTREE_BASE}/$(get_project_name)/remote-only-branch"
+    mkdir -p "$(dirname "$wt_path")"
+    git worktree add -b remote-only-branch "$wt_path" origin/remote-only-branch
+
+    run get_branch_data 1 "" 1
+    assert_success
+    # remote-only-branch should NOT appear (has worktree)
+    refute_contains "$output" 'remote-only-branch'
+
+    # Cleanup
+    git worktree remove "$wt_path" --force
+    git branch -D remote-only-branch
     git remote remove origin
     rm -rf "$remote_dir"
 }

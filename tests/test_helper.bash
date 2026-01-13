@@ -173,6 +173,16 @@ assert_contains() {
     fi
 }
 
+# Assert string does NOT contain substring
+refute_contains() {
+    local haystack="$1"
+    local needle="$2"
+    if [[ "$haystack" == *"$needle"* ]]; then
+        echo "Expected '$haystack' to NOT contain '$needle'" >&2
+        return 1
+    fi
+}
+
 # Assert strings are equal
 assert_equal() {
     local expected="$1"
