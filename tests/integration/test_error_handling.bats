@@ -19,15 +19,14 @@ teardown_file() {
 setup() {
     reset_shared_repo
 
-    # CRITICAL: Initialize WORKTREE_BASE BEFORE load_config to prevent
-    # teardown from deleting ~/.tmux-worktree if setup fails mid-way
-    init_test_worktree_base
-
     cd "$TEST_REPO_DIR"
     source "$SCRIPTS_DIR/helpers.sh"
     source "$SCRIPTS_DIR/filter.sh"
     load_config
     source "$SCRIPTS_DIR/worktree_manager.sh"
+
+    # CRITICAL: Set WORKTREE_BASE AFTER load_config because load_config overwrites it
+    init_test_worktree_base
 }
 
 teardown() {

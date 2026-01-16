@@ -21,15 +21,14 @@ teardown_file() {
 setup() {
     reset_shared_repo
 
-    # CRITICAL: Initialize WORKTREE_BASE BEFORE load_config to prevent
-    # teardown from deleting ~/.tmux-worktree if setup fails mid-way
-    init_test_worktree_base
-
     source_script "$SCRIPTS_DIR/helpers.sh"
     source_script "$SCRIPTS_DIR/filter.sh"
     cd "$TEST_REPO_DIR" || exit 1
     load_config
     source_script "$SCRIPTS_DIR/worktree_manager.sh"
+
+    # CRITICAL: Set WORKTREE_BASE AFTER load_config because load_config overwrites it
+    init_test_worktree_base
 }
 
 teardown() {
@@ -273,7 +272,11 @@ teardown() {
     local session_path
     session_path=$(tmux_run display-message -t "$session_name" -p '#{pane_current_path}')
 
-    assert_equal "$wt_dir" "$session_path"
+    # Resolve both paths to handle macOS /tmp -> /private/tmp symlink
+    local resolved_wt_dir resolved_session_path
+    resolved_wt_dir=$(cd "$wt_dir" && pwd -P)
+    resolved_session_path=$(cd "$session_path" && pwd -P)
+    assert_equal "$resolved_wt_dir" "$resolved_session_path"
 
     tmux_run kill-session -t "$session_name"
     git worktree remove --force "$wt_dir"
@@ -414,7 +417,8 @@ teardown() {
     local branch="feature-one"  # Already exists from create_test_repo
 
     # Should fail because branch exists
-    run bash -c "source '$SCRIPTS_DIR/helpers.sh' && source '$SCRIPTS_DIR/filter.sh' && load_config && export WORKTREE_BASE='$WORKTREE_BASE' && source '$SCRIPTS_DIR/worktree_manager.sh' && create_new_worktree '$branch'"
+    # NOTE: export WORKTREE_BASE AFTER sourcing worktree_manager.sh because it calls load_config
+    run bash -c "source '$SCRIPTS_DIR/helpers.sh' && source '$SCRIPTS_DIR/filter.sh' && load_config && source '$SCRIPTS_DIR/worktree_manager.sh' && export WORKTREE_BASE='$WORKTREE_BASE' && create_new_worktree '$branch'"
 
     # The function displays error but doesn't crash
 

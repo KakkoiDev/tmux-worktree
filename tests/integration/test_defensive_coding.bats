@@ -22,10 +22,13 @@ setup() {
     cd "$TEST_REPO_DIR" || exit 1
     load_config
     source_script "$SCRIPTS_DIR/worktree_manager.sh"
+
+    # CRITICAL: Set WORKTREE_BASE AFTER load_config because load_config overwrites it
+    init_test_worktree_base
 }
 
 teardown() {
-    :
+    safe_cleanup_worktree_base
 }
 
 # ==============================================================================

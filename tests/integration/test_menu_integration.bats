@@ -27,6 +27,9 @@ setup() {
     load_config
     source_script "$SCRIPTS_DIR/worktree_manager.sh"
 
+    # CRITICAL: Set WORKTREE_BASE AFTER load_config because load_config overwrites it
+    init_test_worktree_base
+
     # Override display_menu to capture instead of display
     display_menu() {
         CAPTURED_MENU_OPTIONS="$2"
@@ -35,6 +38,7 @@ setup() {
 
 teardown() {
     CAPTURED_MENU_OPTIONS=""
+    safe_cleanup_worktree_base
 }
 
 # ==============================================================================

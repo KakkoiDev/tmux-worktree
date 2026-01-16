@@ -20,10 +20,14 @@ setup() {
     cd "$TEST_REPO_DIR"
     source "$SCRIPTS_DIR/helpers.sh"
     load_config
+    source "$SCRIPTS_DIR/worktree_manager.sh"
+
+    # CRITICAL: Set WORKTREE_BASE AFTER sourcing worktree_manager.sh because it calls load_config
+    init_test_worktree_base
 }
 
 teardown() {
-    :
+    safe_cleanup_worktree_base
 }
 
 # ==============================================================================

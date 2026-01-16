@@ -23,10 +23,13 @@ else
     SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 fi
 
-# Source helpers and load config
+# Source helpers and load config (only if not already loaded in test context)
 source "$SCRIPT_DIR/helpers.sh"
 source "$SCRIPT_DIR/filter.sh"
-load_config
+# Skip load_config if WORKTREE_BASE is already set to a temp path (test mode)
+if [[ ! "$WORKTREE_BASE" == /tmp/* ]]; then
+    load_config
+fi
 
 # ==============================================================================
 # REMOTE BRANCH FETCHING
