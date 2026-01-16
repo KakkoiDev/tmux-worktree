@@ -146,6 +146,9 @@ teardown() {
 }
 
 @test "show_worktree_menu handles empty results without crashing" {
+    # NOTE: Mock display_menu to prevent opening real tmux menu
+    display_menu() { echo "MENU: $1"; }
+
     # Filter that matches nothing
     run show_worktree_menu 1 "nonexistent-branch-xyz"
     # Should not crash - just verify it runs
@@ -160,6 +163,9 @@ teardown() {
 }
 
 @test "show_remove_worktree_menu handles empty results" {
+    # NOTE: Mock display_menu to prevent opening real tmux menu
+    display_menu() { echo "MENU: $1"; }
+
     run show_remove_worktree_menu 1 "nonexistent-branch-xyz"
     assert_success
 }

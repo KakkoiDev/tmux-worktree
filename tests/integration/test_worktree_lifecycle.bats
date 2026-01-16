@@ -105,8 +105,8 @@ teardown() {
     git worktree remove --force "$wt_dir"
 }
 
-@test "get_worktree_data_with_count returns page count" {
-    run get_worktree_data_with_count 1 ""
+@test "get_worktree_data returns page count as first line" {
+    run get_worktree_data 1 ""
     assert_success
 
     # First line should be a number (page count)

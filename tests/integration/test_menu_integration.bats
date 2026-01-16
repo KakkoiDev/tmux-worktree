@@ -30,7 +30,10 @@ setup() {
     # CRITICAL: Set WORKTREE_BASE AFTER load_config because load_config overwrites it
     init_test_worktree_base
 
-    # Override display_menu to capture instead of display
+    # IMPORTANT: Mock display_menu to prevent opening real tmux menus.
+    # Without this mock, tmux display-menu would block test execution
+    # and require manual Escape key press to continue.
+    # See CONTRIBUTING.md "Testing Menu Functions" for details.
     display_menu() {
         CAPTURED_MENU_OPTIONS="$2"
     }
@@ -198,4 +201,38 @@ teardown() {
 
     git worktree remove --force "$wt_dir/feature-one" 2>/dev/null || true
     rm -rf "$wt_dir"
+}
+
+# ==============================================================================
+# E2E TESTS - Verify script CLI executes correctly
+# These tests validate that the CLI invocation pattern works, which is critical
+# for run-shell commands. The 'version' and 'health_check' commands don't require
+# a tmux client, making them ideal for testing CLI execution.
+# ==============================================================================
+
+@test "script CLI: version command executes via direct invocation" {
+    # Test the CLI invocation pattern: 'script' command
+    run "$SCRIPTS_DIR/worktree_manager.sh" version
+    assert_success
+    assert_contains "$output" "tmux-worktree"
+}
+
+@test "script CLI: health_check command executes via direct invocation" {
+    run "$SCRIPTS_DIR/worktree_manager.sh" health_check
+    assert_success
+    assert_contains "$output" "Health Check"
+}
+
+@test "script invocation pattern works via /bin/sh" {
+    # Verify the exact command format used in run-shell works via /bin/sh
+    # This catches /bin/sh compatibility issues in the invocation pattern
+    run /bin/sh -c "'$SCRIPTS_DIR/worktree_manager.sh' version"
+    assert_success
+    assert_contains "$output" "tmux-worktree"
+}
+
+@test "script invocation with arguments works via /bin/sh" {
+    # Test argument passing through /bin/sh (like run-shell does)
+    run /bin/sh -c "'$SCRIPTS_DIR/worktree_manager.sh' health_check"
+    assert_success
 }
