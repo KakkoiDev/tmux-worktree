@@ -18,15 +18,16 @@ teardown_file() {
 
 setup() {
     reset_shared_repo
+
+    # CRITICAL: Initialize WORKTREE_BASE BEFORE load_config to prevent
+    # teardown from deleting ~/.tmux-worktree if setup fails mid-way
+    init_test_worktree_base
+
     cd "$TEST_REPO_DIR"
     source "$SCRIPTS_DIR/helpers.sh"
     source "$SCRIPTS_DIR/filter.sh"
     load_config
     source "$SCRIPTS_DIR/worktree_manager.sh"
-
-    # Set up worktree base in temp dir
-    export WORKTREE_BASE="${BATS_TMPDIR}/worktrees-$$"
-    mkdir -p "$WORKTREE_BASE"
 }
 
 teardown() {
@@ -34,7 +35,8 @@ teardown() {
     git worktree list --porcelain 2>/dev/null | grep "^worktree " | cut -d' ' -f2 | while read -r wt; do
         [ "$wt" != "$TEST_REPO_DIR" ] && git worktree remove --force "$wt" 2>/dev/null || true
     done
-    rm -rf "$WORKTREE_BASE"
+
+    safe_cleanup_worktree_base
 }
 
 # ==============================================================================

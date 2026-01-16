@@ -280,3 +280,32 @@ cleanup_all_worktrees() {
         fi
     done
 }
+
+# ==============================================================================
+# SAFE TEST ISOLATION
+# ==============================================================================
+
+# Initialize WORKTREE_BASE safely for test isolation
+# MUST be called BEFORE load_config to prevent accidental deletion of ~/.tmux-worktree
+# Returns the temp directory path
+init_test_worktree_base() {
+    export WORKTREE_BASE="${BATS_TMPDIR}/worktrees-$$"
+    mkdir -p "$WORKTREE_BASE"
+    echo "$WORKTREE_BASE"
+}
+
+# Safely clean up WORKTREE_BASE - only deletes if under /tmp
+# Prevents accidental deletion of ~/.tmux-worktree if load_config was called
+# before init_test_worktree_base
+safe_cleanup_worktree_base() {
+    if [[ -z "$WORKTREE_BASE" ]]; then
+        return 0
+    fi
+
+    # Only delete if path is under /tmp or TMPDIR (safety check)
+    if [[ "$WORKTREE_BASE" == /tmp/* ]] || [[ "$WORKTREE_BASE" == "${TMPDIR}"/* ]]; then
+        rm -rf "$WORKTREE_BASE"
+    else
+        echo "WARNING: Refusing to delete WORKTREE_BASE='$WORKTREE_BASE' - not under /tmp" >&2
+    fi
+}
