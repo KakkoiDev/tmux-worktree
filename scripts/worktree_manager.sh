@@ -188,58 +188,13 @@ get_worktree_data() {
         debug_log "get_worktree_data: listing worktrees for page $page"
     fi
 
-    LC_ALL=C git worktree list --porcelain | LC_ALL=C awk -v project="$project_name" -v filter="$regex_filter" -v items_per_page="$ITEMS_PER_PAGE" -v start="$start_line" -v end="$end_line" '
-        BEGIN {
-            count = 0
-            line_num = 0
-        }
-        /^worktree/ {path=$2;full_path=$2;head_sha=""}
-        /^HEAD/ {head_sha=substr($2,1,7)}  # Capture short SHA for detached HEAD
-        /^branch/ {
-            branch=$2
-            sub("refs/heads/", "", branch)
-            # Sanitize branch name - remove newlines and shell metacharacters
-            gsub(/[\r\n]/, "", branch)
-            gsub(/[^a-zA-Z0-9._\/-]/, "", branch)
-
-            # Apply filter (case-insensitive)
-            if (filter == "" || tolower(branch) ~ tolower(filter)) {
-                count++
-                line_num++
-                if (line_num >= start && line_num <= end) {
-                    session_name=project "-" branch
-                    gsub("/", "-", session_name)
-                    items[line_num] = "\"" branch "\" \"\" \"run-shell \\\"tmux has-session -t " session_name " 2>/dev/null && tmux switch-client -t " session_name " || (tmux new-session -d -c \\\\\\\"" full_path "\\\\\\\" -s " session_name " && tmux switch-client -t " session_name ")\\\"\""
-                }
-            }
-        }
-        /^detached/ {
-            # Handle detached HEAD worktrees
-            branch="HEAD@" head_sha
-
-            # Apply filter (case-insensitive)
-            if (filter == "" || tolower(branch) ~ tolower(filter)) {
-                count++
-                line_num++
-                if (line_num >= start && line_num <= end) {
-                    session_name=project "-detached-" head_sha
-                    items[line_num] = "\"" branch "\" \"\" \"run-shell \\\"tmux has-session -t " session_name " 2>/dev/null && tmux switch-client -t " session_name " || (tmux new-session -d -c \\\\\\\"" full_path "\\\\\\\" -s " session_name " && tmux switch-client -t " session_name ")\\\"\""
-                }
-            }
-        }
-        END {
-            # Calculate total pages
-            total_pages = int((count + items_per_page - 1) / items_per_page)
-            if (total_pages < 1) total_pages = 1
-            print total_pages
-
-            # Output menu items
-            for (i = start; i <= end && i <= line_num; i++) {
-                if (items[i] != "") printf "%s ", items[i]
-            }
-            if (line_num > 0) print ""
-        }
-    '
+    LC_ALL=C git worktree list --porcelain | LC_ALL=C awk \
+        -v project="$project_name" \
+        -v filter="$regex_filter" \
+        -v items_per_page="$ITEMS_PER_PAGE" \
+        -v start="$start_line" \
+        -v end="$end_line" \
+        -f "$SCRIPT_DIR/awk/worktree_data.awk"
 }
 
 # Get git branch data with pagination, optional filter, and remote branches
@@ -272,81 +227,15 @@ get_branch_data() {
     local existing_worktrees
     existing_worktrees=$(git worktree list --porcelain 2>/dev/null | grep '^branch refs/heads/' | sed 's|^branch refs/heads/||' | tr '\n' '|' | sed 's/|$//')
 
-    eval "$branch_cmd" | awk -v base="$WORKTREE_BASE" -v project="$project_name" -v filter="$regex_filter" -v items_per_page="$ITEMS_PER_PAGE" -v start="$start_line" -v end="$end_line" -v existing_wt="$existing_worktrees" '
-        BEGIN {
-            count = 0
-            line_num = 0
-            # Parse existing worktrees into an array
-            n = split(existing_wt, wt_arr, "|")
-            for (i = 1; i <= n; i++) {
-                has_worktree[wt_arr[i]] = 1
-            }
-        }
-        {
-            branch = $0
-            # Sanitize branch name - remove newlines and shell metacharacters
-            gsub(/[\r\n]/, "", branch)
-            gsub(/[^a-zA-Z0-9._\/-]/, "", branch)
-
-            # Determine if this is a remote branch
-            is_remote = (index(branch, "/") > 0 && index(branch, "origin/") == 1)
-
-            # For display and matching, use the branch name
-            display_branch = branch
-            local_branch = branch
-
-            # For remote branches, extract local name for worktree creation
-            if (is_remote) {
-                # Strip remote prefix for local branch name (origin/feat -> feat)
-                local_branch = substr(branch, index(branch, "/") + 1)
-                # Skip remote branches that already have a local counterpart
-                # (local branches are listed first, so they are already in the array)
-                if (local_branches[local_branch]) {
-                    next
-                }
-            } else {
-                # Store local branch names for later duplicate detection
-                local_branches[branch] = 1
-            }
-
-            # Skip branches that already have a worktree
-            if (has_worktree[local_branch]) {
-                next
-            }
-
-            # Apply filter (case-insensitive) - match against the branch name portion
-            match_name = is_remote ? local_branch : branch
-            if (filter == "" || tolower(match_name) ~ tolower(filter)) {
-                count++
-                line_num++
-                if (line_num >= start && line_num <= end) {
-                    worktree_path = base "/" project "/" local_branch
-                    session_name = project "-" local_branch
-                    gsub("/", "-", session_name)
-
-                    if (is_remote) {
-                        # Remote branch: create tracking branch (paths quoted for spaces)
-                        items[line_num] = "\"[remote] " display_branch "\" \"\" \"run-shell \\\"git worktree add -b " local_branch " \\\\\\\"" worktree_path "\\\\\\\" " branch " > /dev/null && tmux new-session -d -c \\\\\\\"" worktree_path "\\\\\\\" -s " session_name " && tmux switch-client -t " session_name "\\\"\""
-                    } else {
-                        # Local branch (paths quoted for spaces)
-                        items[line_num] = "\"" display_branch "\" \"\" \"run-shell \\\"git worktree add \\\\\\\"" worktree_path "\\\\\\\" " branch " > /dev/null && tmux new-session -d -c \\\\\\\"" worktree_path "\\\\\\\" -s " session_name " && tmux switch-client -t " session_name "\\\"\""
-                    }
-                }
-            }
-        }
-        END {
-            # Calculate total pages
-            total_pages = int((count + items_per_page - 1) / items_per_page)
-            if (total_pages < 1) total_pages = 1
-            print total_pages
-
-            # Output menu items
-            for (i = start; i <= end && i <= line_num; i++) {
-                if (items[i] != "") printf "%s ", items[i]
-            }
-            if (line_num > 0) print ""
-        }
-    '
+    eval "$branch_cmd" | awk \
+        -v base="$WORKTREE_BASE" \
+        -v project="$project_name" \
+        -v filter="$regex_filter" \
+        -v items_per_page="$ITEMS_PER_PAGE" \
+        -v start="$start_line" \
+        -v end="$end_line" \
+        -v existing_wt="$existing_worktrees" \
+        -f "$SCRIPT_DIR/awk/branch_data.awk"
 }
 
 # Get removable worktree data with pagination and optional filter
@@ -372,69 +261,16 @@ get_removable_worktree_data() {
         debug_log "get_removable_worktree_data: listing worktrees for page $page"
     fi
 
-    LC_ALL=C git worktree list --porcelain | LC_ALL=C awk -v current_dir="$(pwd)" -v script_path="$script_path" -v current_page="$page" -v project="$project_name" -v filter="$regex_filter" -v items_per_page="$ITEMS_PER_PAGE" -v start="$start_line" -v end="$end_line" '
-        BEGIN {
-            count = 0
-            line_num = 0
-        }
-        /^worktree/ {
-            path = $2
-            full_path = path
-            head_sha = ""
-        }
-        /^HEAD/ { head_sha = substr($2,1,7) }
-        /^branch/ {
-            if (path != current_dir) {
-                branch = $2
-                sub("refs/heads/", "", branch)
-                # Sanitize branch name - remove shell metacharacters
-                gsub(/[^a-zA-Z0-9._\/-]/, "", branch)
-
-                # Apply filter (case-insensitive)
-                if (filter == "" || tolower(branch) ~ tolower(filter)) {
-                    count++
-                    line_num++
-                    if (line_num >= start && line_num <= end) {
-                        session_name = project "-" branch
-                        gsub("/", "-", session_name)
-
-                        # Remove worktree only (branch is always kept)
-                        items[line_num] = "\"" branch "\" \"\" \"display-message \\\"Removing worktree...\\\" ; run-shell \\\"'"'"'" script_path "'"'"' remove_worktree \\\\\\\"" full_path "\\\\\\\" \\\\\\\"" branch "\\\\\\\" \\\\\\\"" session_name "\\\\\\\" " current_page "\\\"\""
-                    }
-                }
-            }
-        }
-        /^detached/ {
-            # Handle detached HEAD worktrees
-            if (path != current_dir) {
-                branch = "HEAD@" head_sha
-
-                # Apply filter (case-insensitive)
-                if (filter == "" || tolower(branch) ~ tolower(filter)) {
-                    count++
-                    line_num++
-                    if (line_num >= start && line_num <= end) {
-                        session_name = project "-detached-" head_sha
-
-                        # Detached HEAD worktrees - remove worktree only
-                        items[line_num] = "\"" branch "\" \"\" \"display-message \\\"Removing worktree...\\\" ; run-shell \\\"'"'"'" script_path "'"'"' remove_worktree \\\\\\\"" full_path "\\\\\\\" \\\\\\\"\\\\\\\" \\\\\\\"" session_name "\\\\\\\" " current_page "\\\"\""
-                    }
-                }
-            }
-        }
-        END {
-            # Calculate total pages
-            total_pages = int((count + items_per_page - 1) / items_per_page)
-            if (total_pages < 1) total_pages = 1
-            print total_pages
-
-            # Output menu items
-            for (i = start; i <= end && i <= line_num; i++) {
-                if (items[i] != "") printf "%s ", items[i]
-            }
-            if (line_num > 0) print ""
-        }
-    '
+    LC_ALL=C git worktree list --porcelain | LC_ALL=C awk \
+        -v current_dir="$(pwd)" \
+        -v script_path="$script_path" \
+        -v current_page="$page" \
+        -v project="$project_name" \
+        -v filter="$regex_filter" \
+        -v items_per_page="$ITEMS_PER_PAGE" \
+        -v start="$start_line" \
+        -v end="$end_line" \
+        -f "$SCRIPT_DIR/awk/removable_data.awk"
 }
 
 # ==============================================================================
@@ -448,20 +284,9 @@ get_worktree_page_count() {
     local regex_filter
     regex_filter=$(convert_glob_to_regex "$sanitized_filter")
     local total
-    total=$(LC_ALL=C git worktree list --porcelain | LC_ALL=C awk -v filter="$regex_filter" '
-        /^worktree/ { path = $2 }
-        /^HEAD/ { head_sha = substr($2,1,7) }
-        /^branch/ {
-            branch = $2
-            sub("refs/heads/", "", branch)
-            if (filter == "" || tolower(branch) ~ tolower(filter)) count++
-        }
-        /^detached/ {
-            branch = "HEAD@" head_sha
-            if (filter == "" || tolower(branch) ~ tolower(filter)) count++
-        }
-        END { print count+0 }
-    ')
+    total=$(LC_ALL=C git worktree list --porcelain | LC_ALL=C awk \
+        -v filter="$regex_filter" \
+        -f "$SCRIPT_DIR/awk/worktree_count.awk")
     echo $(( (total + ITEMS_PER_PAGE - 1) / ITEMS_PER_PAGE ))
 }
 
@@ -480,19 +305,9 @@ get_branch_page_count() {
     fi
 
     local total
-    total=$(eval "$branch_cmd" | awk -v filter="$regex_filter" '
-        {
-            branch = $0
-            # For remote branches, match against local part
-            if (index(branch, "origin/") == 1) {
-                match_name = substr(branch, index(branch, "/") + 1)
-            } else {
-                match_name = branch
-            }
-            if (filter == "" || tolower(match_name) ~ tolower(filter)) count++
-        }
-        END { print count+0 }
-    ')
+    total=$(eval "$branch_cmd" | awk \
+        -v filter="$regex_filter" \
+        -f "$SCRIPT_DIR/awk/branch_count.awk")
     echo $(( (total + ITEMS_PER_PAGE - 1) / ITEMS_PER_PAGE ))
 }
 
@@ -503,24 +318,10 @@ get_removable_worktree_page_count() {
     local regex_filter
     regex_filter=$(convert_glob_to_regex "$sanitized_filter")
     local total
-    total=$(LC_ALL=C git worktree list --porcelain | LC_ALL=C awk -v current_dir="$(pwd)" -v filter="$regex_filter" '
-        /^worktree/ { path = $2 }
-        /^HEAD/ { head_sha = substr($2,1,7) }
-        /^branch/ {
-            if (path != current_dir) {
-                branch = $2
-                sub("refs/heads/", "", branch)
-                if (filter == "" || tolower(branch) ~ tolower(filter)) count++
-            }
-        }
-        /^detached/ {
-            if (path != current_dir) {
-                branch = "HEAD@" head_sha
-                if (filter == "" || tolower(branch) ~ tolower(filter)) count++
-            }
-        }
-        END { print count+0 }
-    ')
+    total=$(LC_ALL=C git worktree list --porcelain | LC_ALL=C awk \
+        -v current_dir="$(pwd)" \
+        -v filter="$regex_filter" \
+        -f "$SCRIPT_DIR/awk/removable_count.awk")
     echo $(( (total + ITEMS_PER_PAGE - 1) / ITEMS_PER_PAGE ))
 }
 
