@@ -203,6 +203,43 @@ teardown() {
     rm -rf "$wt_dir"
 }
 
+@test "remove worktree menu contains properly quoted script path" {
+    # Regression test: verify script_path variable is expanded, not literal
+    local wt_dir="${BATS_TMPDIR}/worktrees-$$"
+    mkdir -p "$wt_dir"
+    git worktree add -q "$wt_dir/feature-one" feature-one
+
+    show_remove_worktree_menu 1
+
+    # Must NOT contain literal 'script_path' - that would mean AWK variable wasn't expanded
+    refute_contains "$CAPTURED_MENU_OPTIONS" "script_path"
+
+    # Must contain the actual script path (worktree_manager.sh)
+    assert_contains "$CAPTURED_MENU_OPTIONS" "worktree_manager.sh"
+
+    # Must contain remove_worktree command
+    assert_contains "$CAPTURED_MENU_OPTIONS" "remove_worktree"
+
+    git worktree remove --force "$wt_dir/feature-one" 2>/dev/null || true
+    rm -rf "$wt_dir"
+}
+
+@test "remove worktree menu run-shell command has valid quoting structure" {
+    # Regression test: script path must be single-quoted for proper shell execution
+    local wt_dir="${BATS_TMPDIR}/worktrees-$$"
+    mkdir -p "$wt_dir"
+    git worktree add -q "$wt_dir/feature-one" feature-one
+
+    show_remove_worktree_menu 1
+
+    # The pattern should be 'script_path' not '"'script_path'"'
+    # Check for properly quoted path pattern: '/path/to/script' remove_worktree
+    assert_contains "$CAPTURED_MENU_OPTIONS" "worktree_manager.sh' remove_worktree"
+
+    git worktree remove --force "$wt_dir/feature-one" 2>/dev/null || true
+    rm -rf "$wt_dir"
+}
+
 # ==============================================================================
 # E2E TESTS - Verify script CLI executes correctly
 # These tests validate that the CLI invocation pattern works, which is critical

@@ -399,7 +399,7 @@ get_removable_worktree_data() {
                         gsub("/", "-", session_name)
 
                         # Remove worktree only (branch is always kept)
-                        items[line_num] = "\"" branch "\" \"\" \"display-message \\\"Removing worktree...\\\" ; run-shell \\\"'\"'" script_path "'\"' remove_worktree \\\\\\\"" full_path "\\\\\\\" \\\\\\\"" branch "\\\\\\\" \\\\\\\"" session_name "\\\\\\\" " current_page "\\\"\""
+                        items[line_num] = "\"" branch "\" \"\" \"display-message \\\"Removing worktree...\\\" ; run-shell \\\"'"'"'" script_path "'"'"' remove_worktree \\\\\\\"" full_path "\\\\\\\" \\\\\\\"" branch "\\\\\\\" \\\\\\\"" session_name "\\\\\\\" " current_page "\\\"\""
                     }
                 }
             }
@@ -417,7 +417,7 @@ get_removable_worktree_data() {
                         session_name = project "-detached-" head_sha
 
                         # Detached HEAD worktrees - remove worktree only
-                        items[line_num] = "\"" branch "\" \"\" \"display-message \\\"Removing worktree...\\\" ; run-shell \\\"'\"'" script_path "'\"' remove_worktree \\\\\\\"" full_path "\\\\\\\" \\\\\\\"\\\\\\\" \\\\\\\"" session_name "\\\\\\\" " current_page "\\\"\""
+                        items[line_num] = "\"" branch "\" \"\" \"display-message \\\"Removing worktree...\\\" ; run-shell \\\"'"'"'" script_path "'"'"' remove_worktree \\\\\\\"" full_path "\\\\\\\" \\\\\\\"\\\\\\\" \\\\\\\"" session_name "\\\\\\\" " current_page "\\\"\""
                     }
                 }
             }
