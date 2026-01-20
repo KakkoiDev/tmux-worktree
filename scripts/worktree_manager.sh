@@ -51,11 +51,25 @@ convert_glob_to_regex() {
 }
 
 # ==============================================================================
+# GIT REPOSITORY VALIDATION
+# ==============================================================================
+
+# Validate we're in a git repository, show error if not
+require_git_repo() {
+    if ! git rev-parse --git-dir > /dev/null 2>&1; then
+        tmux display-message "Not in a git repository"
+        return 1
+    fi
+    return 0
+}
+
+# ==============================================================================
 # REMOTE BRANCH FETCHING
 # ==============================================================================
 
 # Fetch remote branches with timeout protection
 fetch_remote_branches() {
+    require_git_repo || return 1
     local timeout_seconds=${FETCH_TIMEOUT:-30}
     local error_file
     error_file=$(mktemp 2>/dev/null || echo "/tmp/tmux-worktree-fetch-$$")
@@ -113,6 +127,7 @@ get_project_name() {
 
 # Remove worktree helper function
 remove_worktree() {
+    require_git_repo || return 1
     local worktree_path="$1"
     local branch_name="$2"
     local session_name="$3"
@@ -567,6 +582,7 @@ display_menu() {
 
 # Show worktree list menu with pagination and optional filter
 show_worktree_menu() {
+    require_git_repo || return 1
     debug_log "show_worktree_menu called: page=${1:-1} filter='${2:-}'"
     local page
     page=$(validate_page "${1:-1}")
@@ -612,6 +628,7 @@ show_worktree_menu() {
 
 # Create new worktree helper function
 create_new_worktree() {
+    require_git_repo || return 1
     local branch="$1"
     debug_log "create_new_worktree called: branch='$branch'"
     local project_name
@@ -655,6 +672,7 @@ create_new_worktree() {
 
 # Show add worktree menu with pagination, optional filter, and optional remote branches
 show_add_worktree_menu() {
+    require_git_repo || return 1
     debug_log "show_add_worktree_menu called: page=${1:-1} filter='${2:-}' include_remotes=${3:-0}"
     local page
     page=$(validate_page "${1:-1}")
@@ -702,6 +720,7 @@ show_add_worktree_menu() {
 
 # Show remove worktree menu with pagination and optional filter
 show_remove_worktree_menu() {
+    require_git_repo || return 1
     debug_log "show_remove_worktree_menu called: page=${1:-1} filter='${2:-}'"
     local page
     page=$(validate_page "${1:-1}")
