@@ -179,6 +179,10 @@ run-shell ~/.tmux/plugins/tmux-worktree/worktrees.tmux
 
 Remove the plugin line from `~/.tmux.conf` and reload. Optionally delete worktrees: `rm -rf ~/.tmux-worktree`.
 
+## Acknowledgments
+
+Thanks to [@Ahmed-878](https://github.com/Ahmed-878) for his help debugging this project.
+
 ## License
 
 MIT
