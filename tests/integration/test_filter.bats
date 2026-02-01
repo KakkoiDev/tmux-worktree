@@ -1,5 +1,6 @@
 #!/usr/bin/env bats
 # Tests for filter functionality
+# bats file_tags=filter,security
 
 load '../test_helper'
 

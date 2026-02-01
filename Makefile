@@ -17,7 +17,7 @@ ALL_TESTS := $(UNIT_TESTS) $(INTEGRATION_TESTS)
 # Default number of parallel jobs (auto-detect CPU count)
 JOBS ?= $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 
-.PHONY: test test-fast test-unit test-integration test-parallel clean help
+.PHONY: test test-fast test-unit test-integration test-parallel test-stress test-coverage test-tags test-smoke clean help
 
 # Default target
 all: test
@@ -85,6 +85,41 @@ test-filter:
 	fi
 	@$(BATS) --filter "$(FILTER)" $(ALL_TESTS)
 
+# Run only stress tests (slow, high-load scenarios)
+test-stress:
+	@echo "Running stress tests..."
+	@$(BATS) $(INTEGRATION_DIR)/test_stress.bats
+
+# Run tests by tag (requires bats 1.10+)
+# Usage: make test-tags TAGS="stress"
+test-tags:
+	@if [ -z "$(TAGS)" ]; then \
+		echo "Usage: make test-tags TAGS=\"tag1,tag2\""; \
+		echo "Available tags: stress, slow, format, syntax, security"; \
+		exit 1; \
+	fi
+	@$(BATS) --filter-tags "$(TAGS)" $(ALL_TESTS) 2>/dev/null || \
+		(echo "Note: Tag filtering requires bats 1.10+. Running all tests instead." && \
+		$(BATS) $(ALL_TESTS))
+
+# Run tests with code coverage (requires kcov)
+test-coverage:
+	@if ! command -v kcov >/dev/null 2>&1; then \
+		echo "Error: kcov not found. Install with:"; \
+		echo "  Ubuntu/Debian: sudo apt-get install kcov"; \
+		echo "  macOS: brew install kcov"; \
+		exit 1; \
+	fi
+	@echo "Running tests with coverage..."
+	@mkdir -p coverage
+	@kcov --include-path=scripts/ coverage/ $(BATS) $(ALL_TESTS)
+	@echo "Coverage report: coverage/index.html"
+
+# Run quick smoke tests (subset for CI)
+test-smoke:
+	@echo "Running smoke tests..."
+	@$(BATS) $(UNIT_TESTS) $(INTEGRATION_DIR)/test_core_functions.bats
+
 # Clean temporary test files
 clean:
 	@echo "Cleaning temporary test files..."
@@ -112,14 +147,21 @@ help:
 	@echo "  make test-parallel       - Run all tests in parallel"
 	@echo "  make test-verbose        - Run all tests with verbose output"
 	@echo "  make test-file FILE=...  - Run a specific test file"
-	@echo "  make test-filter FILTER=.- Run tests matching filter pattern"
+	@echo "  make test-filter FILTER= - Run tests matching filter pattern"
+	@echo "  make test-stress         - Run stress tests (slow)"
+	@echo "  make test-tags TAGS=...  - Run tests by tag (requires bats 1.10+)"
+	@echo "  make test-coverage       - Run tests with coverage (requires kcov)"
+	@echo "  make test-smoke          - Run quick smoke tests for CI"
 	@echo "  make test-count          - Show test file and test count"
 	@echo "  make clean               - Clean temporary test files"
 	@echo ""
 	@echo "Environment variables:"
 	@echo "  JOBS=N                   - Number of parallel jobs (default: auto)"
 	@echo ""
+	@echo "Test tags: stress, slow, format, syntax, security"
+	@echo ""
 	@echo "Examples:"
 	@echo "  make test-file FILE=tests/unit/test_helpers_unit.bats"
 	@echo "  make test-filter FILTER=\"pagination\""
 	@echo "  make test-parallel JOBS=8"
+	@echo "  make test-tags TAGS=\"stress\""

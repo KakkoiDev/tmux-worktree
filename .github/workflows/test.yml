@@ -1,0 +1,93 @@
+name: Tests
+
+on:
+  push:
+    branches: [master, main, develop]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        tmux-version: ['3.2', '3.3', '3.4']
+      fail-fast: false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bats libevent-dev ncurses-dev build-essential
+
+      - name: Build tmux ${{ matrix.tmux-version }}
+        run: |
+          curl -L https://github.com/tmux/tmux/releases/download/${{ matrix.tmux-version }}/tmux-${{ matrix.tmux-version }}.tar.gz | tar xz
+          cd tmux-${{ matrix.tmux-version }}
+          ./configure
+          make -j$(nproc)
+          sudo make install
+          tmux -V
+
+      - name: Run unit tests
+        run: make test-unit
+
+      - name: Run integration tests
+        run: make test-integration
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install shellcheck
+        run: sudo apt-get install -y shellcheck
+
+      - name: Lint scripts
+        run: |
+          shellcheck scripts/*.sh || true
+          echo "Shellcheck completed (warnings allowed)"
+
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bats tmux
+
+      - name: Verify tmux version
+        run: |
+          tmux -V
+          # Ensure tmux 3.0+
+          version=$(tmux -V | grep -oP '\d+\.\d+' | head -1)
+          major=$(echo $version | cut -d. -f1)
+          if [ "$major" -lt 3 ]; then
+            echo "Error: tmux 3.0+ required"
+            exit 1
+          fi
+
+      - name: Run smoke tests
+        run: make test-smoke
+
+  stress:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bats tmux
+
+      - name: Run stress tests
+        run: make test-stress

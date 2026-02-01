@@ -1,6 +1,7 @@
 #!/usr/bin/env bats
 # Unit tests for helpers.sh utility functions
 # These tests don't require git repositories
+# bats file_tags=unit,fast
 
 load '../test_helper'
 

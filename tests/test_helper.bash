@@ -212,6 +212,36 @@ assert_failure() {
     fi
 }
 
+# Assert string matches regex pattern
+assert_matches() {
+    local pattern="$1"
+    local actual="$2"
+    if [[ ! "$actual" =~ $pattern ]]; then
+        echo "Expected '$actual' to match pattern '$pattern'" >&2
+        return 1
+    fi
+}
+
+# Assert string does not contain substring
+assert_not_contains() {
+    local haystack="$1"
+    local needle="$2"
+    if [[ "$haystack" == *"$needle"* ]]; then
+        echo "Expected '$haystack' to NOT contain '$needle'" >&2
+        return 1
+    fi
+}
+
+# Assert output line count
+assert_line_count() {
+    local expected="$1"
+    local actual
+    actual=$(echo "$output" | wc -l)
+    if [ "$expected" -ne "$actual" ]; then
+        echo "Expected $expected lines, got $actual" >&2
+        return 1
+    fi
+}
 
 # ==============================================================================
 # WORKTREE LIFECYCLE HELPERS

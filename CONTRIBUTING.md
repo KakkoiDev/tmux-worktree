@@ -65,6 +65,18 @@ make test-filter FILTER="pagination"
 
 # Run with verbose output
 make test-verbose
+
+# Run stress tests (slow, high-load scenarios)
+make test-stress
+
+# Run tests by tag (requires bats 1.10+)
+make test-tags TAGS="stress"
+
+# Run with code coverage (requires kcov)
+make test-coverage
+
+# Run quick smoke tests for CI
+make test-smoke
 ```
 
 ### Parallel Execution
@@ -96,8 +108,10 @@ tests/
     test_error_handling.bats
     test_filter.bats
     test_menu_integration.bats
+    test_output_format.bats  # Output format validation
     test_plugin_loader.bats
     test_remote_fetch.bats
+    test_stress.bats         # Stress/load tests
     test_worktree_lifecycle.bats
 ```
 
@@ -184,8 +198,26 @@ From `test_helper.bash`:
 - `assert_failure` - Check command failed (non-zero exit)
 - `assert_equal "expected" "$actual"` - Check string equality
 - `assert_contains "$haystack" "needle"` - Check substring present
+- `assert_not_contains "$haystack" "needle"` - Check substring absent
+- `assert_matches "pattern" "$actual"` - Check regex pattern match
+- `assert_line_count N` - Check output has N lines
 - `assert_file_exists "path"` - Check file exists
 - `assert_executable "path"` - Check file is executable
+
+## Test Tags
+
+Tests can be tagged for selective execution (requires bats 1.10+):
+
+```bash
+# bats file_tags=stress,slow
+```
+
+Available tags:
+- `stress` - High-load scenarios
+- `slow` - Long-running tests
+- `format` - Output format validation
+- `syntax` - Command syntax tests
+- `security` - Input sanitization tests
 
 ## Cleaning Up
 
