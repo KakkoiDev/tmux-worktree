@@ -349,23 +349,23 @@ generate_nav_options() {
     # Previous page navigation (preserve filter and extra args)
     if [ "$page" -gt 1 ]; then
         if [ -n "$args_suffix" ]; then
-            nav_options="\"◀ Previous\" \"$KEY_PREV\" \"run-shell \\\"'$script_path' $menu_function $((page - 1)) $args_suffix\\\"\" "
+            nav_options="\"◀ Previous\" \"$KEY_PREV\" \"display-message \\\"Loading...\\\" ; run-shell \\\"'$script_path' $menu_function $((page - 1)) $args_suffix\\\"\" "
         else
-            nav_options="\"◀ Previous\" \"$KEY_PREV\" \"run-shell \\\"'$script_path' $menu_function $((page - 1))\\\"\" "
+            nav_options="\"◀ Previous\" \"$KEY_PREV\" \"display-message \\\"Loading...\\\" ; run-shell \\\"'$script_path' $menu_function $((page - 1))\\\"\" "
         fi
     fi
 
     # Next page navigation (preserve filter and extra args)
     if [ "$page" -lt "$total_pages" ]; then
         if [ -n "$args_suffix" ]; then
-            nav_options="${nav_options}\"Next ▶\" \"$KEY_NEXT\" \"run-shell \\\"'$script_path' $menu_function $((page + 1)) $args_suffix\\\"\" "
+            nav_options="${nav_options}\"Next ▶\" \"$KEY_NEXT\" \"display-message \\\"Loading...\\\" ; run-shell \\\"'$script_path' $menu_function $((page + 1)) $args_suffix\\\"\" "
         else
-            nav_options="${nav_options}\"Next ▶\" \"$KEY_NEXT\" \"run-shell \\\"'$script_path' $menu_function $((page + 1))\\\"\" "
+            nav_options="${nav_options}\"Next ▶\" \"$KEY_NEXT\" \"display-message \\\"Loading...\\\" ; run-shell \\\"'$script_path' $menu_function $((page + 1))\\\"\" "
         fi
     fi
 
     # Back to main menu
-    nav_options="${nav_options}\"← Back\" \"$KEY_BACK\" \"run-shell \\\"'$script_path' tmux_worktrees_main\\\"\""
+    nav_options="${nav_options}\"← Back\" \"$KEY_BACK\" \"display-message \\\"Loading...\\\" ; run-shell \\\"'$script_path' tmux_worktrees_main\\\"\""
 
     echo "$nav_options"
 }
@@ -580,9 +580,9 @@ tmux_worktrees_main() {
     fi
 
     local script_path="$SCRIPT_DIR/worktree_manager.sh"
-    local options='"List" "'"$KEY_LIST"'" "run-shell \"'"'"$script_path"'"' show_worktree_menu\"" \
-    "Add" "'"$KEY_ADD"'" "run-shell \"'"'"$script_path"'"' show_add_worktree_menu\"" \
-    "Remove" "'"$KEY_REMOVE"'" "run-shell \"'"'"$script_path"'"' show_remove_worktree_menu\"" \
+    local options='"List" "'"$KEY_LIST"'" "display-message \"Loading worktrees...\" ; run-shell \"'"'"$script_path"'"' show_worktree_menu\"" \
+    "Add" "'"$KEY_ADD"'" "display-message \"Loading branches...\" ; run-shell \"'"'"$script_path"'"' show_add_worktree_menu\"" \
+    "Remove" "'"$KEY_REMOVE"'" "display-message \"Loading...\" ; run-shell \"'"'"$script_path"'"' show_remove_worktree_menu\"" \
     "Quit" "'"$KEY_QUIT"'" ""'
 
     display_menu "Git Worktrees" "$options"
