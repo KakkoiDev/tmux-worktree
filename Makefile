@@ -17,7 +17,7 @@ ALL_TESTS := $(UNIT_TESTS) $(INTEGRATION_TESTS)
 # Default number of parallel jobs (auto-detect CPU count)
 JOBS ?= $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 
-.PHONY: test test-fast test-unit test-integration test-parallel test-stress test-coverage test-tags test-smoke clean help
+.PHONY: test test-fast test-unit test-integration test-parallel test-stress test-coverage test-tags test-smoke clean reload help
 
 # Default target
 all: test
@@ -126,6 +126,12 @@ clean:
 	@rm -rf /tmp/shared-repo.* /tmp/worktrees-* /tmp/tmux-worktree-*
 	@echo "Done."
 
+# Reload plugin in current tmux session
+reload:
+	@echo "Reloading tmux-worktree plugin..."
+	@tmux run-shell "$(CURDIR)/worktrees.tmux"
+	@echo "Done. Press prefix+W to test."
+
 # Show test count
 test-count:
 	@echo "Test files:"
@@ -154,6 +160,7 @@ help:
 	@echo "  make test-smoke          - Run quick smoke tests for CI"
 	@echo "  make test-count          - Show test file and test count"
 	@echo "  make clean               - Clean temporary test files"
+	@echo "  make reload              - Reload plugin in current tmux session"
 	@echo ""
 	@echo "Environment variables:"
 	@echo "  JOBS=N                   - Number of parallel jobs (default: auto)"
