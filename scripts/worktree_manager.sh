@@ -135,23 +135,31 @@ remove_worktree() {
 
     debug_log "remove_worktree called: path='$worktree_path' branch='$branch_name' session='$session_name'"
 
-    # Remove the worktree with timeout protection
-    # Note: Branch is NOT deleted - user can do that manually if needed
-    local error_output
-    error_output=$(run_with_timeout 10 git worktree remove --force "$worktree_path" 2>&1)
-    local exit_code=$?
-
-    if [ $exit_code -eq 0 ]; then
-        debug_log "remove_worktree: worktree removed OK"
-        tmux display-message "Worktree removed (branch kept): $branch_name"
+    # Check if the worktree path exists
+    if [ ! -d "$worktree_path" ]; then
+        # Path already deleted - just prune the stale entry
+        debug_log "remove_worktree: path already gone, running prune"
+        worktree_prune
+        tmux display-message "Cleaned stale worktree: $branch_name"
     else
-        debug_log "remove_worktree: FAILED to remove worktree: $error_output"
-        local error_msg
-        error_msg=$(echo "$error_output" | head -1 | cut -c1-60)
-        if [ -n "$error_msg" ]; then
-            tmux display-message "Remove failed: $error_msg"
+        # Remove the worktree with timeout protection
+        # Note: Branch is NOT deleted - user can do that manually if needed
+        local error_output
+        error_output=$(run_with_timeout 10 git worktree remove --force "$worktree_path" 2>&1)
+        local exit_code=$?
+
+        if [ $exit_code -eq 0 ]; then
+            debug_log "remove_worktree: worktree removed OK"
+            tmux display-message "Worktree removed (branch kept): $branch_name"
         else
-            tmux display-message "Remove failed (exit $exit_code)"
+            debug_log "remove_worktree: FAILED to remove worktree: $error_output"
+            local error_msg
+            error_msg=$(echo "$error_output" | head -1 | cut -c1-60)
+            if [ -n "$error_msg" ]; then
+                tmux display-message "Remove failed: $error_msg"
+            else
+                tmux display-message "Remove failed (exit $exit_code)"
+            fi
         fi
     fi
 
@@ -182,6 +190,12 @@ get_worktree_data() {
 
     local project_name
     project_name=$(get_project_name)
+
+    # Auto-prune stale worktrees before listing
+    if [ "$(count_stale_worktrees)" -gt 0 ]; then
+        worktree_prune
+        debug_log "get_worktree_data: auto-pruned stale worktrees"
+    fi
 
     # Log worktree paths to debug file
     if [ "$DEBUG" = "on" ]; then

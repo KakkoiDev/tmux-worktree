@@ -298,3 +298,59 @@ ensure_dir() {
     local dir="$1"
     [ -d "$dir" ] || mkdir -p "$dir"
 }
+
+# ==============================================================================
+# WORKTREE HEALTH CHECK HELPERS
+# ==============================================================================
+
+# Check if git version supports worktree repair (Git 2.30+)
+# Returns 0 if supported, 1 if not
+has_worktree_repair() {
+    local version_string
+    local major minor
+
+    version_string=$(git --version 2>/dev/null | sed 's/git version //' | cut -d' ' -f1)
+    major=$(echo "$version_string" | cut -d. -f1)
+    minor=$(echo "$version_string" | cut -d. -f2)
+
+    # git worktree repair was added in Git 2.30
+    if [ -n "$major" ] && [ -n "$minor" ]; then
+        if [ "$major" -gt 2 ] || { [ "$major" -eq 2 ] && [ "$minor" -ge 30 ]; }; then
+            return 0
+        fi
+    fi
+    return 1
+}
+
+# Count stale worktrees (path doesn't exist on filesystem)
+# Returns count as stdout
+count_stale_worktrees() {
+    local count=0
+    local path
+
+    while IFS= read -r line; do
+        if [[ "$line" == worktree\ * ]]; then
+            path="${line#worktree }"
+            if [ ! -d "$path" ]; then
+                count=$((count + 1))
+            fi
+        fi
+    done < <(git worktree list --porcelain 2>/dev/null)
+
+    echo "$count"
+}
+
+# Prune stale worktree entries (removes entries for deleted paths)
+# Returns 0 on success
+worktree_prune() {
+    git worktree prune 2>/dev/null
+}
+
+# Repair worktree references (Git 2.30+ only)
+# Returns 0 on success, 1 if not supported or failed
+worktree_repair() {
+    if ! has_worktree_repair; then
+        return 1
+    fi
+    git worktree repair 2>/dev/null
+}
