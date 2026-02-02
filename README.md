@@ -66,6 +66,10 @@ prefix + W  →  Remove  →  select worktree to delete
 
 Removes the worktree directory. The git branch is preserved (delete manually with `git branch -D` if needed).
 
+### Automatic cleanup
+
+The plugin automatically prunes stale worktree entries (directories that no longer exist) before listing. If you manually delete a worktree directory, it will be cleaned up the next time you open the menu. Git 2.30+ enables additional repair capabilities.
+
 ### Find a specific branch
 
 ```
