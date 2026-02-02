@@ -1,5 +1,6 @@
 #!/usr/bin/env bats
 # Tests for defensive coding - input validation, edge cases, boundary conditions
+# bats file_tags=defensive,security,validation
 
 load '../test_helper'
 

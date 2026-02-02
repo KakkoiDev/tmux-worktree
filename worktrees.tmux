@@ -37,8 +37,8 @@ check_keybinding_conflict() {
 if [ -n "$TMUX" ] || [ -n "$TMUX_SOCKET" ]; then
     check_keybinding_conflict "$KEYBINDING"
     if [ -n "$TMUX_SOCKET" ]; then
-        tmux -L "$TMUX_SOCKET" bind-key "$KEYBINDING" run-shell "$SCRIPTS_DIR/worktree_manager.sh tmux_worktrees_main"
+        tmux -L "$TMUX_SOCKET" bind-key "$KEYBINDING" run-shell "tmux display-message 'Opening...' ; $SCRIPTS_DIR/worktree_manager.sh tmux_worktrees_main"
     else
-        tmux bind-key "$KEYBINDING" run-shell "$SCRIPTS_DIR/worktree_manager.sh tmux_worktrees_main"
+        tmux bind-key "$KEYBINDING" run-shell "tmux display-message 'Opening...' ; $SCRIPTS_DIR/worktree_manager.sh tmux_worktrees_main"
     fi
 fi
