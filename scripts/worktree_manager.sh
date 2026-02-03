@@ -423,7 +423,7 @@ show_worktree_menu() {
     [ -n "$filter" ] && title="$title - Filter: '$filter'"
 
     # Filter option (always present)
-    local filter_option="\"Filter\" \"$KEY_FILTER\" \"command-prompt -p 'Filter pattern:' 'run-shell \\\"'$script_path' show_worktree_menu 1 %1\\\"'\""
+    local filter_option="\"Filter\" \"$KEY_FILTER\" \"command-prompt -T search -p 'Filter pattern:' 'run-shell \\\"'$script_path' show_worktree_menu 1 '\\''%1'\\''\\\"'\""
 
     # Clear filter option (only when filter active)
     local clear_option=""
@@ -521,7 +521,7 @@ show_add_worktree_menu() {
     local fetch_option="\"Fetch remote\" \"$KEY_FETCH\" \"run-shell \\\"'$script_path' fetch_remote_branches && '$script_path' show_add_worktree_menu 1 '$filter' 1\\\"\""
 
     # Filter option (always present)
-    local filter_option="\"Filter\" \"$KEY_FILTER\" \"command-prompt -p 'Filter pattern:' 'run-shell \\\"'$script_path' show_add_worktree_menu 1 %1 $include_remotes\\\"'\""
+    local filter_option="\"Filter\" \"$KEY_FILTER\" \"command-prompt -T search -p 'Filter pattern:' 'run-shell \\\"'$script_path' show_add_worktree_menu 1 '\\''%1'\\'' $include_remotes\\\"'\""
 
     # Clear filter option (only when filter active)
     local clear_option=""
@@ -561,7 +561,7 @@ show_remove_worktree_menu() {
     [ -n "$filter" ] && title="$title - Filter: '$filter'"
 
     # Filter option (always present)
-    local filter_option="\"Filter\" \"$KEY_FILTER\" \"command-prompt -p 'Filter pattern:' 'run-shell \\\"'$script_path' show_remove_worktree_menu 1 %1\\\"'\""
+    local filter_option="\"Filter\" \"$KEY_FILTER\" \"command-prompt -T search -p 'Filter pattern:' 'run-shell \\\"'$script_path' show_remove_worktree_menu 1 '\\''%1'\\''\\\"'\""
 
     # Clear filter option (only when filter active)
     local clear_option=""
