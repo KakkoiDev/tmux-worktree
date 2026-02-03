@@ -142,6 +142,30 @@ set -g @worktree-key-fetch "r"
 
 </details>
 
+## Environment Variables
+
+Sessions created by tmux-worktree include environment variables for integration with other tools:
+
+| Variable | Description |
+|----------|-------------|
+| `TMUX_WORKTREE` | Set to `1` in managed sessions |
+| `TMUX_WORKTREE_PROJECT` | Project/repository name |
+| `TMUX_WORKTREE_BRANCH` | Branch name |
+| `TMUX_WORKTREE_PATH` | Worktree directory path |
+
+**Example: Shell prompt**
+```bash
+# .bashrc / .zshrc
+if [ -n "$TMUX_WORKTREE" ]; then
+    PS1="[$TMUX_WORKTREE_PROJECT:$TMUX_WORKTREE_BRANCH] $PS1"
+fi
+```
+
+**Example: Tmux statusline**
+```bash
+set -g status-right '#{?TMUX_WORKTREE,#[fg=green]#{TMUX_WORKTREE_BRANCH},}'
+```
+
 ## Troubleshooting
 
 **Menu doesn't appear:** Requires tmux 3.0+. Check with `tmux -V`.

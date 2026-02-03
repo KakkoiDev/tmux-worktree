@@ -108,6 +108,12 @@ fetch_remote_branches() {
 # Get project name from git repository (works from worktrees too)
 # Sanitizes output to prevent command injection via malicious directory names
 get_project_name() {
+    # Fast path: use env var if in managed session
+    if [ -n "$TMUX_WORKTREE_PROJECT" ]; then
+        echo "$TMUX_WORKTREE_PROJECT"
+        return
+    fi
+
     local name
     # Use git-common-dir to get the main repo path (works from worktrees too)
     local git_common_dir
@@ -465,7 +471,11 @@ create_new_worktree() {
 
     if [ $exit_code -eq 0 ]; then
         debug_log "create_new_worktree: worktree created at $worktree_path"
-        if tmux new-session -d -c "$worktree_path" -s "$session_name" && \
+        if tmux new-session -d -c "$worktree_path" -s "$session_name" \
+               -e "TMUX_WORKTREE=1" \
+               -e "TMUX_WORKTREE_PROJECT=$project_name" \
+               -e "TMUX_WORKTREE_BRANCH=$branch" \
+               -e "TMUX_WORKTREE_PATH=$worktree_path" && \
            tmux switch-client -t "$session_name"; then
             debug_log "create_new_worktree: SUCCESS session=$session_name"
             tmux display-message "Created worktree and session: $session_name"

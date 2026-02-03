@@ -56,10 +56,10 @@ BEGIN {
 
             if (is_remote) {
                 # Remote branch: create tracking branch (paths quoted for spaces)
-                items[line_num] = "\"[remote] " display_branch "\" \"\" \"display-message \\\"Creating worktree...\\\" ; run-shell \\\"git worktree add -b " local_branch " \\\\\\\"" worktree_path "\\\\\\\" " branch " > /dev/null && tmux new-session -d -c \\\\\\\"" worktree_path "\\\\\\\" -s " session_name " && tmux switch-client -t " session_name "\\\"\""
+                items[line_num] = "\"[remote] " display_branch "\" \"\" \"display-message \\\"Creating worktree...\\\" ; run-shell \\\"git worktree add -b " local_branch " \\\\\\\"" worktree_path "\\\\\\\" " branch " > /dev/null && tmux new-session -d -c \\\\\\\"" worktree_path "\\\\\\\" -s " session_name " -e TMUX_WORKTREE=1 -e TMUX_WORKTREE_PROJECT=" project " -e TMUX_WORKTREE_BRANCH=" local_branch " -e TMUX_WORKTREE_PATH=\\\\\\\"" worktree_path "\\\\\\\" && tmux switch-client -t " session_name "\\\"\""
             } else {
                 # Local branch (paths quoted for spaces)
-                items[line_num] = "\"" display_branch "\" \"\" \"display-message \\\"Creating worktree...\\\" ; run-shell \\\"git worktree add \\\\\\\"" worktree_path "\\\\\\\" " branch " > /dev/null && tmux new-session -d -c \\\\\\\"" worktree_path "\\\\\\\" -s " session_name " && tmux switch-client -t " session_name "\\\"\""
+                items[line_num] = "\"" display_branch "\" \"\" \"display-message \\\"Creating worktree...\\\" ; run-shell \\\"git worktree add \\\\\\\"" worktree_path "\\\\\\\" " branch " > /dev/null && tmux new-session -d -c \\\\\\\"" worktree_path "\\\\\\\" -s " session_name " -e TMUX_WORKTREE=1 -e TMUX_WORKTREE_PROJECT=" project " -e TMUX_WORKTREE_BRANCH=" local_branch " -e TMUX_WORKTREE_PATH=\\\\\\\"" worktree_path "\\\\\\\" && tmux switch-client -t " session_name "\\\"\""
             }
         }
     }
