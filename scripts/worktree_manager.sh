@@ -539,7 +539,13 @@ show_add_worktree_menu() {
         clear_option="\"Clear filter\" \"$KEY_CLEAR_FILTER\" \"run-shell \\\"'$script_path' show_add_worktree_menu 1 '' $include_remotes\\\"\""
     fi
 
-    local all_options="$new_option $fetch_option $filter_option $clear_option $branch_items $nav_options"
+    if [ -n "$branch_items" ]; then
+        local all_options="$new_option $fetch_option $filter_option $clear_option $branch_items $nav_options"
+    else
+        debug_log "show_add_worktree_menu: no branches found"
+        local all_options="$new_option $fetch_option $filter_option $clear_option \"(No branches available)\" \"\" \"\" $nav_options"
+    fi
+
     display_menu "$title" "$all_options"
 }
 
