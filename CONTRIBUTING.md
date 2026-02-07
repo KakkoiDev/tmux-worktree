@@ -36,6 +36,17 @@ Thanks for your interest in contributing! This guide covers how to set up your d
   parallel --version
   ```
 
+## Development Workflow
+
+```bash
+# Edit code, then reload the plugin in your current tmux session
+make reload
+
+# Press prefix + W to test your changes
+```
+
+The `reload` target re-sources the plugin without restarting tmux, making iteration fast.
+
 ## Running Tests
 
 ### Quick Commands
@@ -112,6 +123,7 @@ tests/
     test_plugin_loader.bats
     test_remote_fetch.bats
     test_stress.bats         # Stress/load tests
+    test_worktree_health.bats    # Stale worktree detection/cleanup
     test_worktree_lifecycle.bats
 ```
 

@@ -66,6 +66,10 @@ prefix + W  →  Remove  →  select worktree to delete
 
 Removes the worktree directory. The git branch is preserved (delete manually with `git branch -D` if needed).
 
+### Automatic cleanup
+
+The plugin automatically prunes stale worktree entries (directories that no longer exist) before listing. If you manually delete a worktree directory, it will be cleaned up the next time you open the menu. Git 2.30+ enables additional repair capabilities.
+
 ### Find a specific branch
 
 ```
@@ -137,6 +141,30 @@ set -g @worktree-key-fetch "r"
 ```
 
 </details>
+
+## Environment Variables
+
+Sessions created by tmux-worktree include environment variables for integration with other tools:
+
+| Variable | Description |
+|----------|-------------|
+| `TMUX_WORKTREE` | Set to `1` in managed sessions |
+| `TMUX_WORKTREE_PROJECT` | Project/repository name |
+| `TMUX_WORKTREE_BRANCH` | Branch name |
+| `TMUX_WORKTREE_PATH` | Worktree directory path |
+
+**Example: Shell prompt**
+```bash
+# .bashrc / .zshrc
+if [ -n "$TMUX_WORKTREE" ]; then
+    PS1="[$TMUX_WORKTREE_PROJECT:$TMUX_WORKTREE_BRANCH] $PS1"
+fi
+```
+
+**Example: Tmux statusline**
+```bash
+set -g status-right '#{?TMUX_WORKTREE,#[fg=green]#{TMUX_WORKTREE_BRANCH},}'
+```
 
 ## Troubleshooting
 

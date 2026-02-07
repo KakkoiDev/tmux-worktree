@@ -108,6 +108,12 @@ fetch_remote_branches() {
 # Get project name from git repository (works from worktrees too)
 # Sanitizes output to prevent command injection via malicious directory names
 get_project_name() {
+    # Fast path: use env var if in managed session
+    if [ -n "$TMUX_WORKTREE_PROJECT" ]; then
+        echo "$TMUX_WORKTREE_PROJECT"
+        return
+    fi
+
     local name
     # Use git-common-dir to get the main repo path (works from worktrees too)
     local git_common_dir
@@ -423,7 +429,7 @@ show_worktree_menu() {
     [ -n "$filter" ] && title="$title - Filter: '$filter'"
 
     # Filter option (always present)
-    local filter_option="\"Filter\" \"$KEY_FILTER\" \"command-prompt -p 'Filter pattern:' 'run-shell \\\"'$script_path' show_worktree_menu 1 %1\\\"'\""
+    local filter_option="\"Filter\" \"$KEY_FILTER\" \"command-prompt -T search -p 'Filter pattern:' 'run-shell \\\"'$script_path' show_worktree_menu 1 '\\''%1'\\''\\\"'\""
 
     # Clear filter option (only when filter active)
     local clear_option=""
@@ -465,7 +471,11 @@ create_new_worktree() {
 
     if [ $exit_code -eq 0 ]; then
         debug_log "create_new_worktree: worktree created at $worktree_path"
-        if tmux new-session -d -c "$worktree_path" -s "$session_name" && \
+        if tmux new-session -d -c "$worktree_path" -s "$session_name" \
+               -e "TMUX_WORKTREE=1" \
+               -e "TMUX_WORKTREE_PROJECT=$project_name" \
+               -e "TMUX_WORKTREE_BRANCH=$branch" \
+               -e "TMUX_WORKTREE_PATH=$worktree_path" && \
            tmux switch-client -t "$session_name"; then
             debug_log "create_new_worktree: SUCCESS session=$session_name"
             tmux display-message "Created worktree and session: $session_name"
@@ -521,7 +531,7 @@ show_add_worktree_menu() {
     local fetch_option="\"Fetch remote\" \"$KEY_FETCH\" \"run-shell \\\"'$script_path' fetch_remote_branches && '$script_path' show_add_worktree_menu 1 '$filter' 1\\\"\""
 
     # Filter option (always present)
-    local filter_option="\"Filter\" \"$KEY_FILTER\" \"command-prompt -p 'Filter pattern:' 'run-shell \\\"'$script_path' show_add_worktree_menu 1 %1 $include_remotes\\\"'\""
+    local filter_option="\"Filter\" \"$KEY_FILTER\" \"command-prompt -T search -p 'Filter pattern:' 'run-shell \\\"'$script_path' show_add_worktree_menu 1 '\\''%1'\\'' $include_remotes\\\"'\""
 
     # Clear filter option (only when filter active)
     local clear_option=""
@@ -529,7 +539,13 @@ show_add_worktree_menu() {
         clear_option="\"Clear filter\" \"$KEY_CLEAR_FILTER\" \"run-shell \\\"'$script_path' show_add_worktree_menu 1 '' $include_remotes\\\"\""
     fi
 
-    local all_options="$new_option $fetch_option $filter_option $clear_option $branch_items $nav_options"
+    if [ -n "$branch_items" ]; then
+        local all_options="$new_option $fetch_option $filter_option $clear_option $branch_items $nav_options"
+    else
+        debug_log "show_add_worktree_menu: no branches found"
+        local all_options="$new_option $fetch_option $filter_option $clear_option \"(No branches available)\" \"\" \"\" $nav_options"
+    fi
+
     display_menu "$title" "$all_options"
 }
 
@@ -561,7 +577,7 @@ show_remove_worktree_menu() {
     [ -n "$filter" ] && title="$title - Filter: '$filter'"
 
     # Filter option (always present)
-    local filter_option="\"Filter\" \"$KEY_FILTER\" \"command-prompt -p 'Filter pattern:' 'run-shell \\\"'$script_path' show_remove_worktree_menu 1 %1\\\"'\""
+    local filter_option="\"Filter\" \"$KEY_FILTER\" \"command-prompt -T search -p 'Filter pattern:' 'run-shell \\\"'$script_path' show_remove_worktree_menu 1 '\\''%1'\\''\\\"'\""
 
     # Clear filter option (only when filter active)
     local clear_option=""
