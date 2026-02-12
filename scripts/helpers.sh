@@ -214,6 +214,11 @@ load_config() {
     export KEY_LIST KEY_ADD KEY_REMOVE
     export KEY_NEXT KEY_PREV KEY_FILTER KEY_CLEAR_FILTER KEY_FETCH KEY_BACK KEY_QUIT KEY_NEW
 
+    # Ensure worktree base directory exists (needed for debug logs)
+    if [ -n "$WORKTREE_BASE" ]; then
+        mkdir -p "$WORKTREE_BASE" 2>/dev/null || true
+    fi
+
     # Log config if debug enabled
     if [ "$DEBUG" = "on" ]; then
         debug_log "=== Config loaded ==="

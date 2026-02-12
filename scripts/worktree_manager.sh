@@ -601,7 +601,8 @@ show_remove_worktree_menu() {
 
 # Main tmux worktrees menu
 tmux_worktrees_main() {
-    debug_log "tmux_worktrees_main called"
+    debug_log "tmux_worktrees_main called from cwd=$(pwd)"
+    debug_log "git check: $(git rev-parse --git-dir 2>&1 || true)"
 
     # Check if we're in a git repository
     if ! git rev-parse --git-dir > /dev/null 2>&1; then
