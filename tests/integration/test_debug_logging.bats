@@ -27,6 +27,8 @@ setup() {
 }
 
 teardown() {
+    cd "$TEST_REPO_DIR"
+    cleanup_test_branches
     safe_cleanup_worktree_base
 }
 
@@ -172,4 +174,71 @@ teardown() {
     [[ "$content" == *"git check:"* ]]
 
     rm -rf "$non_git_dir"
+}
+
+# ==============================================================================
+# PANE CWD RESOLUTION
+# ==============================================================================
+
+@test "tmux_worktrees_main succeeds when called from a git repo directory" {
+    cd "$TEST_REPO_DIR"
+
+    # Mock display_menu to prevent real menu
+    display_menu() { echo "MENU_CALLED"; }
+
+    run tmux_worktrees_main
+    assert_success
+}
+
+@test "get_branch_data includes cd prefix with pane_cwd" {
+    # Create a branch so get_branch_data has output
+    cd "$TEST_REPO_DIR"
+    git branch test-cwd-branch
+
+    run get_branch_data 1 "" 0
+    assert_success
+
+    # Output should contain "cd" prefix with the test repo path
+    # because get_branch_data passes pane_cwd=$(pwd) to awk
+    [[ "$output" == *"cd "* ]]
+    [[ "$output" == *"$TEST_REPO_DIR"* ]]
+}
+
+@test "get_branch_data cd prefix uses current working directory" {
+    cd "$TEST_REPO_DIR"
+    git branch test-cwd-verify
+
+    local before_output
+    before_output=$(get_branch_data 1 "" 0)
+
+    # The cd prefix in the awk output should reference the pane CWD
+    # This ensures run-shell commands start in the correct directory
+    [[ "$before_output" == *"cd"*"$TEST_REPO_DIR"*"git worktree add"* ]]
+}
+
+@test "main resolves pane CWD before dispatching commands" {
+    # Start in a non-git temp dir (simulates run-shell's session CWD)
+    local start_dir
+    start_dir=$(mktemp -d "${BATS_TMPDIR}/session-cwd.XXXXXX")
+
+    # Mock tmux display-message to return our test repo (simulates pane CWD)
+    tmux() {
+        if [[ "$1" == "display-message" && "$2" == "-p" ]]; then
+            echo "$TEST_REPO_DIR"
+        else
+            command tmux "$@"
+        fi
+    }
+    export -f tmux
+
+    # Mock display_menu to capture that we got past the git check
+    display_menu() { echo "MENU_OK"; }
+
+    cd "$start_dir"
+
+    # main() should resolve pane CWD to TEST_REPO_DIR, then succeed
+    run main tmux_worktrees_main
+    assert_success
+
+    rm -rf "$start_dir"
 }

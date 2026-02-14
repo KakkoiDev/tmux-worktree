@@ -98,19 +98,14 @@ reset_shared_repo() {
         done
     fi
 
-    # Quick check: only clean branches if more than base 4
-    local branch_count
-    branch_count=$(git branch 2>/dev/null | wc -l)
-    if [ "$branch_count" -gt 4 ]; then
-        git checkout -q master 2>/dev/null || true
-        # Delete non-base branches in one pass
-        git for-each-ref --format='%(refname:short)' refs/heads/ | while read -r branch; do
-            case "$branch" in
-                master|feature-one|feature-two|bugfix-123) ;;
-                *) git branch -D "$branch" 2>/dev/null || true ;;
-            esac
-        done
-    fi
+    # Delete non-base branches (ensures clean state even after test crashes)
+    git checkout -q master 2>/dev/null || true
+    git for-each-ref --format='%(refname:short)' refs/heads/ | while read -r branch; do
+        case "$branch" in
+            master|feature-one|feature-two|bugfix-123) ;;
+            *) git branch -D "$branch" 2>/dev/null || true ;;
+        esac
+    done
 
     git checkout -q master 2>/dev/null || true
     TEST_REPO_DIR="$SHARED_REPO_DIR"

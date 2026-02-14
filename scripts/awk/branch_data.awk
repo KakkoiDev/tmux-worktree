@@ -54,12 +54,18 @@ BEGIN {
             session_name = project "-" local_branch
             gsub("/", "-", session_name)
 
+            # Prefix cd to pane CWD so run-shell starts in the correct directory
+            cd_prefix = ""
+            if (pane_cwd != "") {
+                cd_prefix = "cd \\\\\\\"" pane_cwd "\\\\\\\" && "
+            }
+
             if (is_remote) {
                 # Remote branch: create tracking branch (paths quoted for spaces)
-                items[line_num] = "\"[remote] " display_branch "\" \"\" \"display-message \\\"Creating worktree...\\\" ; run-shell \\\"git worktree add -b " local_branch " \\\\\\\"" worktree_path "\\\\\\\" " branch " > /dev/null && tmux new-session -d -c \\\\\\\"" worktree_path "\\\\\\\" -s " session_name " -e TMUX_WORKTREE=1 -e TMUX_WORKTREE_PROJECT=" project " -e TMUX_WORKTREE_BRANCH=" local_branch " -e TMUX_WORKTREE_PATH=\\\\\\\"" worktree_path "\\\\\\\" && tmux switch-client -t " session_name "\\\"\""
+                items[line_num] = "\"[remote] " display_branch "\" \"\" \"display-message \\\"Creating worktree...\\\" ; run-shell \\\"" cd_prefix "git worktree add -b " local_branch " \\\\\\\"" worktree_path "\\\\\\\" " branch " > /dev/null && tmux new-session -d -c \\\\\\\"" worktree_path "\\\\\\\" -s " session_name " -e TMUX_WORKTREE=1 -e TMUX_WORKTREE_PROJECT=" project " -e TMUX_WORKTREE_BRANCH=" local_branch " -e TMUX_WORKTREE_PATH=\\\\\\\"" worktree_path "\\\\\\\" && tmux switch-client -t " session_name "\\\"\""
             } else {
                 # Local branch (paths quoted for spaces)
-                items[line_num] = "\"" display_branch "\" \"\" \"display-message \\\"Creating worktree...\\\" ; run-shell \\\"git worktree add \\\\\\\"" worktree_path "\\\\\\\" " branch " > /dev/null && tmux new-session -d -c \\\\\\\"" worktree_path "\\\\\\\" -s " session_name " -e TMUX_WORKTREE=1 -e TMUX_WORKTREE_PROJECT=" project " -e TMUX_WORKTREE_BRANCH=" local_branch " -e TMUX_WORKTREE_PATH=\\\\\\\"" worktree_path "\\\\\\\" && tmux switch-client -t " session_name "\\\"\""
+                items[line_num] = "\"" display_branch "\" \"\" \"display-message \\\"Creating worktree...\\\" ; run-shell \\\"" cd_prefix "git worktree add \\\\\\\"" worktree_path "\\\\\\\" " branch " > /dev/null && tmux new-session -d -c \\\\\\\"" worktree_path "\\\\\\\" -s " session_name " -e TMUX_WORKTREE=1 -e TMUX_WORKTREE_PROJECT=" project " -e TMUX_WORKTREE_BRANCH=" local_branch " -e TMUX_WORKTREE_PATH=\\\\\\\"" worktree_path "\\\\\\\" && tmux switch-client -t " session_name "\\\"\""
             }
         }
     }

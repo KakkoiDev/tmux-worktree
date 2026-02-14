@@ -255,6 +255,7 @@ get_branch_data() {
         -v start="$start_line" \
         -v end="$end_line" \
         -v existing_wt="$existing_worktrees" \
+        -v pane_cwd="$(pwd)" \
         -f "$SCRIPT_DIR/awk/branch_data.awk"
 }
 
@@ -651,6 +652,12 @@ health_check() {
 
 # Main entry point
 main() {
+    # Resolve pane's actual working directory (run-shell uses session CWD, not pane CWD)
+    PANE_CWD=$(tmux display-message -p '#{pane_current_path}' 2>/dev/null)
+    if [ -n "$PANE_CWD" ] && [ -d "$PANE_CWD" ]; then
+        cd "$PANE_CWD" || true
+    fi
+
     case "${1:-tmux_worktrees_main}" in
         "tmux_worktrees_main"|"") tmux_worktrees_main ;;
         "show_worktree_menu") show_worktree_menu "$2" "$3" ;;
