@@ -26,8 +26,8 @@ BEGIN {
             line_num++
             if (line_num >= start && line_num <= end) {
                 session_name = project "-" branch
-                gsub("/", "-", session_name)
-                gsub("[.:]", "-", session_name)
+                gsub("/", "_", session_name)
+                gsub("[.:]", "_", session_name)
 
                 # Remove worktree only (branch is always kept)
                 # script_path is passed directly via -v, no shell quoting needed
@@ -47,7 +47,7 @@ BEGIN {
             line_num++
             if (line_num >= start && line_num <= end) {
                 session_name = project "-detached-" head_sha
-                gsub("[.:]", "-", session_name)
+                gsub("[.:]", "_", session_name)
 
                 # Detached HEAD worktrees - remove worktree only
                 items[line_num] = "\"" branch "\" \"\" \"display-message \\\"Removing worktree...\\\" ; run-shell \\\"'" script_path "' remove_worktree \\\\\\\"" full_path "\\\\\\\" \\\\\\\"\\\\\\\" \\\\\\\"" session_name "\\\\\\\" " current_page "\\\"\""

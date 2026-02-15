@@ -262,9 +262,9 @@ get_session_name() {
     local project="$1"
     local branch="$2"
     local session_name="${project}-${branch}"
-    session_name="${session_name//\//-}"
-    session_name="${session_name//./-}"
-    session_name="${session_name//:/-}"
+    session_name="${session_name//\//_}"
+    session_name="${session_name//./_}"
+    session_name="${session_name//:/_}"
     echo "$session_name"
 }
 

@@ -163,7 +163,7 @@ teardown() {
     # Test with slashes
     run get_session_name "$project" "feature/auth/login"
     assert_success
-    assert_equal "myproject-feature-auth-login" "$output"
+    assert_equal "myproject-feature_auth_login" "$output"
 }
 
 @test "create_new_worktree handles empty branch name" {

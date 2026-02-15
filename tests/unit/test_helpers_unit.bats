@@ -67,10 +67,10 @@ setup() {
     assert_equal "myproject-main" "$output"
 }
 
-@test "get_session_name replaces slashes with dashes" {
+@test "get_session_name replaces slashes with underscores" {
     run get_session_name "myproject" "feature/auth/login"
     assert_success
-    assert_equal "myproject-feature-auth-login" "$output"
+    assert_equal "myproject-feature_auth_login" "$output"
 }
 
 @test "get_session_name handles simple branch names" {
@@ -79,28 +79,28 @@ setup() {
     assert_equal "repo-bugfix-123" "$output"
 }
 
-@test "get_session_name replaces dots with dashes" {
+@test "get_session_name replaces dots with underscores" {
     run get_session_name "repo" "release-1.2.3"
     assert_success
-    assert_equal "repo-release-1-2-3" "$output"
+    assert_equal "repo-release-1_2_3" "$output"
 }
 
-@test "get_session_name replaces colons with dashes" {
+@test "get_session_name replaces colons with underscores" {
     run get_session_name "repo" "feat:thing"
     assert_success
-    assert_equal "repo-feat-thing" "$output"
+    assert_equal "repo-feat_thing" "$output"
 }
 
 @test "get_session_name replaces dots in project name" {
     run get_session_name ".config" "experiment"
     assert_success
-    assert_equal "-config-experiment" "$output"
+    assert_equal "_config-experiment" "$output"
 }
 
 @test "get_session_name sanitizes all special characters" {
     run get_session_name "my.project" "feat:new/thing"
     assert_success
-    assert_equal "my-project-feat-new-thing" "$output"
+    assert_equal "my_project-feat_new_thing" "$output"
 }
 
 # ==============================================================================

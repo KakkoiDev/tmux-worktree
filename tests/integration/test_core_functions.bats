@@ -165,8 +165,8 @@ teardown() {
     assert_success
     assert_contains "$output" "feature/auth/login"
 
-    # Session name should have slashes replaced with dashes
-    assert_contains "$output" "-feature-auth-login"
+    # Session name should have slashes replaced with underscores
+    assert_contains "$output" "-feature_auth_login"
 
     # Cleanup
     git branch -D "feature/auth/login" 2>/dev/null || true
