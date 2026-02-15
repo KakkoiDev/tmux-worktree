@@ -257,12 +257,15 @@ debug_log() {
 # to prevent command injection. Do not duplicate here.
 
 # Generate session name from project and branch
-# Replaces / with - for valid tmux session names
+# Replaces characters invalid in tmux session names: / . :
 get_session_name() {
     local project="$1"
     local branch="$2"
     local session_name="${project}-${branch}"
-    echo "${session_name//\//-}"
+    session_name="${session_name//\//-}"
+    session_name="${session_name//./-}"
+    session_name="${session_name//:/-}"
+    echo "$session_name"
 }
 
 # ==============================================================================

@@ -53,6 +53,7 @@ BEGIN {
             worktree_path = base "/" project "/" local_branch
             session_name = project "-" local_branch
             gsub("/", "-", session_name)
+            gsub("[.:]", "-", session_name)
 
             # Prefix cd to pane CWD so run-shell starts in the correct directory
             cd_prefix = ""

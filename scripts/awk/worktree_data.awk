@@ -23,6 +23,7 @@ BEGIN {
         if (line_num >= start && line_num <= end) {
             session_name = project "-" branch
             gsub("/", "-", session_name)
+            gsub("[.:]", "-", session_name)
             items[line_num] = "\"" branch "\" \"\" \"display-message \\\"Switching...\\\" ; run-shell \\\"tmux has-session -t " session_name " 2>/dev/null && tmux switch-client -t " session_name " || (tmux new-session -d -c \\\\\\\"" full_path "\\\\\\\" -s " session_name " -e TMUX_WORKTREE=1 -e TMUX_WORKTREE_PROJECT=" project " -e TMUX_WORKTREE_BRANCH=" branch " -e TMUX_WORKTREE_PATH=\\\\\\\"" full_path "\\\\\\\" && tmux switch-client -t " session_name ")\\\"\""
         }
     }
@@ -37,6 +38,7 @@ BEGIN {
         line_num++
         if (line_num >= start && line_num <= end) {
             session_name = project "-detached-" head_sha
+            gsub("[.:]", "-", session_name)
             items[line_num] = "\"" branch "\" \"\" \"display-message \\\"Switching...\\\" ; run-shell \\\"tmux has-session -t " session_name " 2>/dev/null && tmux switch-client -t " session_name " || (tmux new-session -d -c \\\\\\\"" full_path "\\\\\\\" -s " session_name " -e TMUX_WORKTREE=1 -e TMUX_WORKTREE_PROJECT=" project " -e TMUX_WORKTREE_BRANCH=" branch " -e TMUX_WORKTREE_PATH=\\\\\\\"" full_path "\\\\\\\" && tmux switch-client -t " session_name ")\\\"\""
         }
     }

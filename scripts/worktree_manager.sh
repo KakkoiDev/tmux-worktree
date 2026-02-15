@@ -456,6 +456,8 @@ create_new_worktree() {
     local project_name
     project_name=$(get_project_name)
     local session_name="${project_name}-${branch//\//-}"
+    session_name="${session_name//./-}"
+    session_name="${session_name//:/-}"
     local worktree_path="$WORKTREE_BASE/$project_name/$branch"
     debug_log "create_new_worktree: project=$project_name session=$session_name path=$worktree_path"
 

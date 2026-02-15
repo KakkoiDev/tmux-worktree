@@ -79,10 +79,28 @@ setup() {
     assert_equal "repo-bugfix-123" "$output"
 }
 
-@test "get_session_name handles dots in branch name" {
+@test "get_session_name replaces dots with dashes" {
     run get_session_name "repo" "release-1.2.3"
     assert_success
-    assert_equal "repo-release-1.2.3" "$output"
+    assert_equal "repo-release-1-2-3" "$output"
+}
+
+@test "get_session_name replaces colons with dashes" {
+    run get_session_name "repo" "feat:thing"
+    assert_success
+    assert_equal "repo-feat-thing" "$output"
+}
+
+@test "get_session_name replaces dots in project name" {
+    run get_session_name ".config" "experiment"
+    assert_success
+    assert_equal "-config-experiment" "$output"
+}
+
+@test "get_session_name sanitizes all special characters" {
+    run get_session_name "my.project" "feat:new/thing"
+    assert_success
+    assert_equal "my-project-feat-new-thing" "$output"
 }
 
 # ==============================================================================
