@@ -57,7 +57,7 @@ convert_glob_to_regex() {
 # Validate we're in a git repository, show error if not
 require_git_repo() {
     if ! git rev-parse --git-dir > /dev/null 2>&1; then
-        display_menu "Not a git repo" '"Quit" "q" ""'
+        display_menu "Not a git repository" '"Quit" "q" ""'
         return 1
     fi
     return 0
