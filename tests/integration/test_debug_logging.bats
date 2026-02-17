@@ -143,7 +143,8 @@ teardown() {
     cd "$non_git_dir"
 
     run tmux_worktrees_main
-    assert_failure
+    # Returns 0 so run-shell doesn't dump output to the pane
+    assert_success
 
     local log_file="$WORKTREE_BASE/.tmux-worktree.log"
     [ -f "$log_file" ]
@@ -157,21 +158,21 @@ teardown() {
     rm -rf "$non_git_dir"
 }
 
-@test "tmux_worktrees_main logs git check result on failure" {
+@test "tmux_worktrees_main does not log git check in non-git dir" {
     DEBUG="on"
     local non_git_dir
     non_git_dir=$(mktemp -d "${BATS_TMPDIR}/non-git-diag.XXXXXX")
     cd "$non_git_dir"
 
     run tmux_worktrees_main
-    assert_failure
+    assert_success
 
     local log_file="$WORKTREE_BASE/.tmux-worktree.log"
     local content
     content=$(cat "$log_file")
 
-    # Should log the git rev-parse output (fatal error message)
-    [[ "$content" == *"git check:"* ]]
+    # git check log only appears after require_git_repo succeeds
+    [[ "$content" != *"git check:"* ]]
 
     rm -rf "$non_git_dir"
 }

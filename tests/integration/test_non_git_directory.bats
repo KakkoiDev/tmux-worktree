@@ -106,11 +106,12 @@ teardown() {
 # tmux_worktrees_main EXISTING CHECK
 # ==============================================================================
 
-@test "tmux_worktrees_main fails outside git repo" {
+@test "tmux_worktrees_main returns success outside git repo" {
     cd "$NON_GIT_DIR"
 
     run tmux_worktrees_main
-    assert_failure
+    # Returns 0 so run-shell doesn't dump output to the pane
+    assert_success
 }
 
 @test "tmux_worktrees_main succeeds in git repo" {
