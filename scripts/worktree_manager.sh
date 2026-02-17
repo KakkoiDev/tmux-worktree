@@ -57,7 +57,7 @@ convert_glob_to_regex() {
 # Validate we're in a git repository, show error if not
 require_git_repo() {
     if ! git rev-parse --git-dir > /dev/null 2>&1; then
-        tmux display-message "Not in a git repository"
+        tmux display-message "Not a git repo - open a pane in a git project to use worktrees"
         return 1
     fi
     return 0
@@ -608,10 +608,7 @@ tmux_worktrees_main() {
     debug_log "git check: $(git rev-parse --git-dir 2>&1 || true)"
 
     # Check if we're in a git repository
-    if ! git rev-parse --git-dir > /dev/null 2>&1; then
-        tmux display-message "Not in a git repository"
-        return 1
-    fi
+    require_git_repo || return 1
 
     local script_path="$SCRIPT_DIR/worktree_manager.sh"
     local options='"List" "'"$KEY_LIST"'" "display-message \"Loading worktrees...\" ; run-shell \"'"'"$script_path"'"' show_worktree_menu\"" \
