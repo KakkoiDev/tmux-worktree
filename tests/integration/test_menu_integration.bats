@@ -63,6 +63,11 @@ teardown() {
     assert_contains "$CAPTURED_MENU_OPTIONS" '"Remove"'
 }
 
+@test "main menu generates Options option" {
+    tmux_worktrees_main
+    assert_contains "$CAPTURED_MENU_OPTIONS" '"Options"'
+}
+
 @test "main menu generates Quit option" {
     tmux_worktrees_main
     assert_contains "$CAPTURED_MENU_OPTIONS" '"Quit"'

@@ -66,6 +66,20 @@ prefix + W  →  Remove  →  select worktree to delete
 
 Removes the worktree directory. The git branch is preserved (delete manually with `git branch -D` if needed).
 
+### Skip cold-start with copy-ignored
+
+```
+# Enable in tmux.conf or via Options menu
+set -g @worktree-copy-ignored "on"
+```
+
+When enabled, creating a worktree copies `.gitignore`d files (node_modules, dist, .env, etc.) from the primary worktree. Uses Copy-on-Write on macOS/APFS for near-instant copies.
+
+```
+prefix + W  →  Options  →  toggle "Copy ignored"
+prefix + W  →  Add  →  select branch  →  files copied automatically
+```
+
 ### Automatic cleanup
 
 The plugin automatically prunes stale worktree entries (directories that no longer exist) before listing. If you manually delete a worktree directory, it will be cleaned up the next time you open the menu. Git 2.30+ enables additional repair capabilities.
@@ -85,7 +99,8 @@ Shows only branches matching the pattern. Supports `*` (any characters) and `?` 
 | `l` | List worktrees |
 | `a` | Add worktree |
 | `d` | Remove worktree |
-| `i` / `o` | Next / Previous page |
+| `o` | Options / Previous page |
+| `i` | Next page |
 | `f` | Filter |
 | `c` | Clear filter |
 | `n` | New branch (in Add menu) |
@@ -121,6 +136,10 @@ set -g @worktree-path "~/worktrees"
 
 # Items per page (default: 15)
 set -g @worktree-items-per-page "20"
+
+# Copy ignored files to new worktrees (default: off)
+# Copies node_modules, dist, .env etc. from primary worktree using CoW
+set -g @worktree-copy-ignored "on"
 ```
 
 <details>
@@ -138,6 +157,7 @@ set -g @worktree-key-filter "f"
 set -g @worktree-key-clear-filter "c"
 set -g @worktree-key-new "n"
 set -g @worktree-key-fetch "r"
+set -g @worktree-key-options "o"
 ```
 
 </details>

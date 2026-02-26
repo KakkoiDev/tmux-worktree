@@ -1,4 +1,5 @@
-# Markdown files (except README and CONTRIBUTING)
+# Markdown files (except README, CONTRIBUTING, IDEA)
 *.md
 !README.md
 !CONTRIBUTING.md
+!IDEA.md

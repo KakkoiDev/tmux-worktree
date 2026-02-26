@@ -173,6 +173,8 @@ _load_config_from_tmux() {
     KEY_BACK=$(get_tmux_option "@worktree-key-back" "b")
     KEY_QUIT=$(get_tmux_option "@worktree-key-quit" "q")
     KEY_NEW=$(get_tmux_option "@worktree-key-new" "n")
+    KEY_OPTIONS=$(get_tmux_option "@worktree-key-options" "o")
+    COPY_IGNORED=$(get_tmux_option "@worktree-copy-ignored" "off")
 
     # Write to cache file for next invocation
     cat > "$cache_file" 2>/dev/null <<CACHE
@@ -192,6 +194,8 @@ KEY_FETCH='$KEY_FETCH'
 KEY_BACK='$KEY_BACK'
 KEY_QUIT='$KEY_QUIT'
 KEY_NEW='$KEY_NEW'
+KEY_OPTIONS='$KEY_OPTIONS'
+COPY_IGNORED='$COPY_IGNORED'
 CACHE
 }
 
@@ -213,6 +217,7 @@ load_config() {
     export WORKTREE_BASE ITEMS_PER_PAGE FETCH_TIMEOUT KEYBINDING DEBUG
     export KEY_LIST KEY_ADD KEY_REMOVE
     export KEY_NEXT KEY_PREV KEY_FILTER KEY_CLEAR_FILTER KEY_FETCH KEY_BACK KEY_QUIT KEY_NEW
+    export KEY_OPTIONS COPY_IGNORED
 
     # Ensure worktree base directory exists (needed for debug logs)
     if [ -n "$WORKTREE_BASE" ]; then

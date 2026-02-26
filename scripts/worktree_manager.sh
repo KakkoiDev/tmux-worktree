@@ -448,6 +448,68 @@ show_worktree_menu() {
     display_menu "$title" "$all_options"
 }
 
+# Copy gitignored files from primary worktree to a new worktree
+# Uses CoW (cp -c) on macOS for near-instant copies, regular cp on Linux
+copy_ignored_files() {
+    local target_path="$1"
+    local primary
+    primary=$(git worktree list --porcelain | head -1 | sed 's/^worktree //')
+
+    debug_log "copy_ignored_files: primary=$primary target=$target_path"
+
+    # Get list of ignored files/directories from primary worktree
+    local ignored_items
+    ignored_items=$(cd "$primary" && git ls-files --others --ignored --exclude-standard --directory 2>/dev/null)
+
+    if [ -z "$ignored_items" ]; then
+        debug_log "copy_ignored_files: no ignored files found"
+        return 0
+    fi
+
+    local copied=0
+    local failed=0
+
+    while IFS= read -r item; do
+        [ -z "$item" ] && continue
+        # Strip trailing slash for consistent handling
+        item="${item%/}"
+        local src="$primary/$item"
+        local dst="$target_path/$item"
+
+        # Skip if source doesn't exist
+        [ ! -e "$src" ] && continue
+
+        # Ensure parent directory exists
+        mkdir -p "$(dirname "$dst")" 2>/dev/null
+
+        # Copy using CoW on macOS (with fallback), regular on Linux
+        local copy_ok=false
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            if cp -Rc "$src" "$dst" 2>/dev/null; then
+                copy_ok=true
+            elif cp -R "$src" "$dst" 2>/dev/null; then
+                copy_ok=true
+            fi
+        else
+            if cp -Ra "$src" "$dst" 2>/dev/null; then
+                copy_ok=true
+            fi
+        fi
+
+        if $copy_ok; then
+            copied=$((copied + 1))
+        else
+            failed=$((failed + 1))
+        fi
+    done <<< "$ignored_items"
+
+    debug_log "copy_ignored_files: copied=$copied failed=$failed"
+
+    if [ "$copied" -gt 0 ]; then
+        tmux display-message "Copied $copied ignored item(s) to new worktree"
+    fi
+}
+
 # Create new worktree helper function
 create_new_worktree() {
     require_git_repo || return 1
@@ -474,6 +536,10 @@ create_new_worktree() {
 
     if [ $exit_code -eq 0 ]; then
         debug_log "create_new_worktree: worktree created at $worktree_path"
+        # Copy ignored files if enabled
+        if [ "$COPY_IGNORED" = "on" ]; then
+            copy_ignored_files "$worktree_path"
+        fi
         if tmux new-session -d -c "$worktree_path" -s "$session_name" \
                -e "TMUX_WORKTREE=1" \
                -e "TMUX_WORKTREE_PROJECT=$project_name" \
@@ -599,6 +665,55 @@ show_remove_worktree_menu() {
 }
 
 # ==============================================================================
+# OPTIONS MENU
+# ==============================================================================
+
+# Cycle through a list of values, wrapping around
+# Usage: _cycle_value "current" "val1" "val2" "val3"
+_cycle_value() {
+    local current="$1"
+    shift
+    local values=("$@")
+    local count=${#values[@]}
+    local i
+    for ((i = 0; i < count; i++)); do
+        if [ "${values[$i]}" = "$current" ]; then
+            echo "${values[$(( (i + 1) % count ))]}"
+            return
+        fi
+    done
+    # Current value not found, return first
+    echo "${values[0]}"
+}
+
+# Show options menu for runtime configuration
+# Each item sets a tmux option and re-displays the menu with updated values
+show_options_menu() {
+    reload_config
+    local script_path="$SCRIPT_DIR/worktree_manager.sh"
+
+    # Compute next values for toggles and cycles
+    local next_copy_ignored next_debug next_items next_timeout
+    next_copy_ignored=$(_cycle_value "$COPY_IGNORED" "off" "on")
+    next_debug=$(_cycle_value "$DEBUG" "off" "on")
+    next_items=$(_cycle_value "$ITEMS_PER_PAGE" "10" "15" "20" "25")
+    next_timeout=$(_cycle_value "$FETCH_TIMEOUT" "15" "30" "60" "120")
+
+    local dp
+    dp=$(display_path "$WORKTREE_BASE")
+
+    local options=""
+    options="\"Copy ignored: $COPY_IGNORED\" \"\" \"set-option -g @worktree-copy-ignored $next_copy_ignored ; run-shell \\\"'$script_path' show_options_menu\\\"\" "
+    options="$options\"Debug: $DEBUG\" \"\" \"set-option -g @worktree-debug $next_debug ; run-shell \\\"'$script_path' show_options_menu\\\"\" "
+    options="$options\"Items/page: $ITEMS_PER_PAGE\" \"\" \"set-option -g @worktree-items-per-page $next_items ; run-shell \\\"'$script_path' show_options_menu\\\"\" "
+    options="$options\"Fetch timeout: ${FETCH_TIMEOUT}s\" \"\" \"set-option -g @worktree-fetch-timeout $next_timeout ; run-shell \\\"'$script_path' show_options_menu\\\"\" "
+    options="$options\"Path: $dp\" \"\" \"command-prompt -p 'Worktree path:' 'set-option -g @worktree-path '\\''%1'\\'' ; run-shell \\\"'$script_path' show_options_menu\\\"'\" "
+    options="$options\"← Back\" \"$KEY_BACK\" \"run-shell \\\"'$script_path' tmux_worktrees_main\\\"\""
+
+    display_menu "Options" "$options"
+}
+
+# ==============================================================================
 # MAIN MENU
 # ==============================================================================
 
@@ -617,6 +732,7 @@ tmux_worktrees_main() {
     local options='"List" "'"$KEY_LIST"'" "display-message \"Loading worktrees...\" ; run-shell \"'"'"$script_path"'"' show_worktree_menu\"" \
     "Add" "'"$KEY_ADD"'" "display-message \"Loading branches...\" ; run-shell \"'"'"$script_path"'"' show_add_worktree_menu\"" \
     "Remove" "'"$KEY_REMOVE"'" "display-message \"Loading...\" ; run-shell \"'"'"$script_path"'"' show_remove_worktree_menu\"" \
+    "Options" "'"$KEY_OPTIONS"'" "run-shell \"'"'"$script_path"'"' show_options_menu\"" \
     "Quit" "'"$KEY_QUIT"'" ""'
 
     display_menu "Git Worktrees" "$options"
@@ -668,6 +784,7 @@ main() {
         "remove_worktree") remove_worktree "$2" "$3" "$4" "$5" "$6" ;;
         "create_new_worktree") create_new_worktree "$2" ;;
         "fetch_remote_branches") fetch_remote_branches ;;
+        "show_options_menu") show_options_menu ;;
         "version") show_version ;;
         "health_check") health_check ;;
         *) echo "Unknown command: $1" ;;
