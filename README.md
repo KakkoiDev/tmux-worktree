@@ -2,7 +2,7 @@
 
 > **Beta:** This plugin is under active development. Configuration options and behavior may change.
 
-Work on three branches at the same time without ever leaving tmux. One keypress creates a worktree, opens a session, and drops you in - ready to code. Switch between tasks instantly. Clean up when you're done.
+Work on multiple branches at the same time without ever leaving tmux. One keypress creates a worktree, opens a session, and drops you in - ready to code. Switch between tasks instantly. Clean up when you're done.
 
 No CLI commands to remember. No paths to manage. Just a menu that does everything git worktree can do, faster than you can type it.
 
