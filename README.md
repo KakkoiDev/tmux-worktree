@@ -2,13 +2,9 @@
 
 > **Beta:** This plugin is under active development. Configuration options and behavior may change.
 
-Git worktree management that lives inside tmux. One keypress to create, switch, or remove worktrees - no CLI commands, no context switching, no waiting.
+Work on three branches at the same time without ever leaving tmux. One keypress creates a worktree, opens a session, and drops you in - ready to code. Switch between tasks instantly. Clean up when you're done.
 
-- **Tmux native** - built on `display-menu`, feels like part of tmux itself
-- **Instant** - create a worktree and land in a new session in under a second
-- **Zero setup** - pure bash, no compilation, no dependencies beyond tmux and git
-- **Complete** - create, list, switch, filter, fetch remote, remove - all from the menu
-- **Cold-start solved** - copy node_modules, .env, build caches to new worktrees via CoW
+No CLI commands to remember. No paths to manage. Just a menu that does everything git worktree can do, faster than you can type it.
 
 <a href="https://github.com/user-attachments/assets/d9fc4507-00c4-422f-9457-c6dfbb2ef022">
   <img src="https://github.com/user-attachments/assets/3d947242-47e6-424e-872c-ef9fcf41a7b5" alt="Demo" width="600">
