@@ -13,6 +13,8 @@ No CLI commands to remember. No paths to manage. Just a menu that does everythin
 
 ## Quick Start
 
+Requires **tmux 3.0+**, **git**, and **bash 3.2+**.
+
 **Install with [TPM](https://github.com/tmux-plugins/tpm):**
 
 ```bash
@@ -24,7 +26,7 @@ Press `prefix + I` to install, then `prefix + W` to open the menu.
 
 ## Workflows
 
-### Start working on a feature
+### Create a worktree
 
 ```
 prefix + W  →  Add  →  select "feature/login"
@@ -32,23 +34,13 @@ prefix + W  →  Add  →  select "feature/login"
 
 Creates a worktree at `~/.tmux-worktree/myproject/feature/login` and opens a new tmux session.
 
-### Review a colleague's PR
-
-```
-prefix + W  →  Add  →  Fetch remote  →  select "[remote] origin/fix-bug-123"
-```
-
-Fetches latest branches, creates a local tracking branch with its own worktree.
-
 ### Switch between tasks
 
 ```
 prefix + s  →  select session
 ```
 
-Use tmux's built-in session switcher for quick navigation between open sessions.
-
-For worktrees without an open session:
+Use tmux's built-in session switcher. For worktrees without an open session:
 
 ```
 prefix + W  →  List  →  select worktree
@@ -56,39 +48,40 @@ prefix + W  →  List  →  select worktree
 
 Creates a session if needed, then switches to it.
 
-### Clean up after merging
-
-```
-prefix + W  →  Remove  →  select worktree to delete
-```
-
-Removes the worktree directory. The git branch is preserved (delete manually with `git branch -D` if needed).
-
-### Skip cold-start with copy-ignored
-
-```
-# Enable in tmux.conf or via Options menu
-set -g @worktree-copy-ignored "on"
-```
-
-When enabled, creating a worktree copies `.gitignore`d files (node_modules, dist, .env, etc.) from the primary worktree. Uses Copy-on-Write on macOS/APFS for near-instant copies.
-
-```
-prefix + W  →  Options  →  toggle "Copy ignored"
-prefix + W  →  Add  →  select branch  →  files copied automatically
-```
-
-### Automatic cleanup
-
-The plugin automatically prunes stale worktree entries (directories that no longer exist) before listing. If you manually delete a worktree directory, it will be cleaned up the next time you open the menu. Git 2.30+ enables additional repair capabilities.
-
-### Find a specific branch
+### Find a branch
 
 ```
 prefix + W  →  List  →  Filter  →  type "feature*"  →  Enter
 ```
 
 Shows only branches matching the pattern. Supports `*` (any characters) and `?` (single character).
+
+### Remove a worktree
+
+```
+prefix + W  →  Remove  →  select worktree to delete
+```
+
+Removes the worktree directory. The git branch is preserved (delete manually with `git branch -D` if needed). Stale entries from manually deleted directories are pruned automatically.
+
+### Check out a remote branch
+
+```
+prefix + W  →  Add  →  Fetch remote  →  select "[remote] origin/fix-bug-123"
+```
+
+Fetches latest branches, creates a local tracking branch with its own worktree.
+
+### Copy build files to new worktrees
+
+New worktrees start empty - no `node_modules/`, no `.env`, no build output. Enable this to copy those files automatically from your main worktree:
+
+```bash
+# In tmux.conf, or toggle at runtime: prefix + W → Options
+set -g @worktree-copy-ignored "on"
+```
+
+Uses Copy-on-Write on macOS for near-instant copies regardless of size.
 
 ## Keys
 
@@ -106,9 +99,9 @@ Shows only branches matching the pattern. Supports `*` (any characters) and `?` 
 | `b` | Back |
 | `q` | Quit |
 
-## How It Works
+## Worktree Storage
 
-Worktrees are stored by project:
+Worktrees are organized by project:
 
 ```
 ~/.tmux-worktree/
@@ -123,7 +116,7 @@ Sessions are named `{project}-{branch}` (e.g., `myproject-feature-login`).
 
 ## Configuration
 
-Most users don't need to configure anything. For customization:
+Works out of the box. Settings can be changed in `tmux.conf` or at runtime via `prefix + W → Options`.
 
 ```bash
 # Change keybinding (default: W)
@@ -135,8 +128,7 @@ set -g @worktree-path "~/worktrees"
 # Items per page (default: 15)
 set -g @worktree-items-per-page "20"
 
-# Copy ignored files to new worktrees (default: off)
-# Copies node_modules, dist, .env etc. from primary worktree using CoW
+# Copy .gitignore'd files to new worktrees (default: off)
 set -g @worktree-copy-ignored "on"
 ```
 
@@ -162,7 +154,7 @@ set -g @worktree-key-options "o"
 
 ## Environment Variables
 
-Sessions created by tmux-worktree include environment variables for integration with other tools:
+Each worktree session exposes variables you can use in your shell prompt or tmux statusline:
 
 | Variable | Description |
 |----------|-------------|
@@ -171,7 +163,7 @@ Sessions created by tmux-worktree include environment variables for integration 
 | `TMUX_WORKTREE_BRANCH` | Branch name |
 | `TMUX_WORKTREE_PATH` | Worktree directory path |
 
-**Example: Shell prompt**
+**Shell prompt:**
 ```bash
 # .bashrc / .zshrc
 if [ -n "$TMUX_WORKTREE" ]; then
@@ -179,7 +171,7 @@ if [ -n "$TMUX_WORKTREE" ]; then
 fi
 ```
 
-**Example: Tmux statusline**
+**Tmux statusline:**
 ```bash
 set -g status-right '#{?TMUX_WORKTREE,#[fg=green]#{TMUX_WORKTREE_BRANCH},}'
 ```
@@ -192,22 +184,9 @@ set -g status-right '#{?TMUX_WORKTREE,#[fg=green]#{TMUX_WORKTREE_BRANCH},}'
 
 **Keybinding conflict:** Change with `set -g @worktree-keybinding "T"`.
 
-**Debug mode:** Enable with `set -g @worktree-debug "on"`. Logs written to `~/.tmux-worktree/.tmux-worktree.log`.
+**Debug mode:** Enable with `set -g @worktree-debug "on"` or via `prefix + W → Options`. Logs written to `~/.tmux-worktree/.tmux-worktree.log`.
 
-## Report a Bug
-
-[Open an issue](https://github.com/KakkoiDev/tmux-worktree/issues/new) with:
-
-1. Enable debug mode: `set -g @worktree-debug "on"`
-2. Reload tmux and reproduce the issue
-3. Include relevant lines from `~/.tmux-worktree/.tmux-worktree.log`
-4. Add your tmux version (`tmux -V`) and OS
-
-## Requirements
-
-- tmux 3.0+
-- git
-- bash 3.2+
+**Something else?** [Open an issue](https://github.com/KakkoiDev/tmux-worktree/issues/new) with your tmux version (`tmux -V`), OS, and relevant lines from the debug log.
 
 ## Manual Installation
 
