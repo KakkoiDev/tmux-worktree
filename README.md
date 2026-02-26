@@ -2,16 +2,18 @@
 
 > **Beta:** This plugin is under active development. Configuration options and behavior may change.
 
-Native tmux for parallel workflows. AI agents, code reviews, tests. Each task gets its own worktree and session.
+Git worktree management that lives inside tmux. One keypress to create, switch, or remove worktrees - no CLI commands, no context switching, no waiting.
+
+- **Tmux native** - built on `display-menu`, feels like part of tmux itself
+- **Instant** - create a worktree and land in a new session in under a second
+- **Zero setup** - pure bash, no compilation, no dependencies beyond tmux and git
+- **Complete** - create, list, switch, filter, fetch remote, remove - all from the menu
+- **Cold-start solved** - copy node_modules, .env, build caches to new worktrees via CoW
 
 <a href="https://github.com/user-attachments/assets/d9fc4507-00c4-422f-9457-c6dfbb2ef022">
   <img src="https://github.com/user-attachments/assets/3d947242-47e6-424e-872c-ef9fcf41a7b5" alt="Demo" width="600">
 </a><br>
 <a href="https://github.com/user-attachments/assets/d9fc4507-00c4-422f-9457-c6dfbb2ef022">▶ Click to watch demo</a>
-
-
-
-
 
 ## Quick Start
 
