@@ -165,8 +165,8 @@ teardown() {
     assert_success
     assert_contains "$output" "feature/auth/login"
 
-    # Session name should have slashes replaced with underscores
-    assert_contains "$output" "-feature_auth_login"
+    # Menu routes through add_worktree dispatch
+    assert_contains "$output" "add_worktree"
 
     # Cleanup
     git branch -D "feature/auth/login" 2>/dev/null || true
@@ -205,7 +205,7 @@ teardown() {
 
     run get_branch_data 1
     assert_success
-    assert_contains "$output" "git worktree add"
+    assert_contains "$output" "add_worktree"
 }
 
 # ==============================================================================

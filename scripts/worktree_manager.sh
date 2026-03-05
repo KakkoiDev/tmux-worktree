@@ -248,14 +248,13 @@ get_branch_data() {
     existing_worktrees=$(git worktree list --porcelain 2>/dev/null | grep '^branch refs/heads/' | sed 's|^branch refs/heads/||' | tr '\n' '|' | sed 's/|$//')
 
     eval "$branch_cmd" | awk \
-        -v base="$WORKTREE_BASE" \
         -v project="$project_name" \
         -v filter="$regex_filter" \
         -v items_per_page="$ITEMS_PER_PAGE" \
         -v start="$start_line" \
         -v end="$end_line" \
         -v existing_wt="$existing_worktrees" \
-        -v pane_cwd="$(pwd)" \
+        -v script_path="$SCRIPT_DIR/worktree_manager.sh" \
         -f "$SCRIPT_DIR/awk/branch_data.awk"
 }
 
@@ -510,17 +509,101 @@ copy_ignored_files() {
     fi
 }
 
-# Create new worktree helper function
+# Shared worktree creation logic
+# Usage: _setup_worktree "branch" "worktree_path" "session_name" "project_name"
+_setup_worktree() {
+    local branch="$1"
+    local worktree_path="$2"
+    local session_name="$3"
+    local project_name="$4"
+
+    # Copy ignored files if enabled
+    if [ "$COPY_IGNORED" = "on" ]; then
+        copy_ignored_files "$worktree_path"
+    fi
+    # Run post-create hook (non-fatal)
+    _run_post_create_hook "$branch" "$project_name" "$worktree_path" || true
+
+    if tmux new-session -d -c "$worktree_path" -s "$session_name" \
+           -e "TMUX_WORKTREE=1" \
+           -e "TMUX_WORKTREE_PROJECT=$project_name" \
+           -e "TMUX_WORKTREE_BRANCH=$branch" \
+           -e "TMUX_WORKTREE_PATH=$worktree_path" && \
+       tmux switch-client -t "$session_name"; then
+        debug_log "_setup_worktree: SUCCESS session=$session_name"
+        tmux display-message "Created worktree and session: $session_name"
+    else
+        debug_log "_setup_worktree: worktree OK but session FAILED"
+        tmux display-message "Worktree created but session failed - try 'tmux new -s $session_name'"
+    fi
+}
+
+# Compute worktree path and session name from branch
+_worktree_vars() {
+    local branch="$1"
+    local project_name="$2"
+    _WT_SESSION="${project_name}-${branch//\//_}"
+    _WT_SESSION="${_WT_SESSION//./_}"
+    _WT_SESSION="${_WT_SESSION//:/_}"
+    _WT_PATH="$WORKTREE_BASE/$project_name/$branch"
+}
+
+# Create worktree from existing branch
+# Usage: add_worktree "branch" ["remote_ref"]
+add_worktree() {
+    require_git_repo || return 1
+    local branch="$1"
+    local remote_ref="${2:-}"
+    debug_log "add_worktree called: branch='$branch' remote_ref='$remote_ref'"
+    local project_name
+    project_name=$(get_project_name)
+    _worktree_vars "$branch" "$project_name"
+    local session_name="$_WT_SESSION"
+    local worktree_path="$_WT_PATH"
+    debug_log "add_worktree: project=$project_name session=$session_name path=$worktree_path"
+
+    # Ensure project directory exists
+    if ! mkdir -p "$WORKTREE_BASE/$project_name" 2>/dev/null; then
+        debug_log "add_worktree: FAILED to create $WORKTREE_BASE/$project_name"
+        tmux display-message "Failed to create directory: $WORKTREE_BASE/$project_name (check permissions)"
+        return 1
+    fi
+
+    local error_output
+    if [ -n "$remote_ref" ]; then
+        # Remote branch: create tracking local branch
+        error_output=$(git worktree add -b "$branch" "$worktree_path" "$remote_ref" 2>&1)
+    else
+        # Local branch: check out existing
+        error_output=$(git worktree add "$worktree_path" "$branch" 2>&1)
+    fi
+    local exit_code=$?
+
+    if [ $exit_code -eq 0 ]; then
+        debug_log "add_worktree: worktree created at $worktree_path"
+        _setup_worktree "$branch" "$worktree_path" "$session_name" "$project_name"
+    else
+        debug_log "add_worktree: FAILED git worktree add: $error_output"
+        local error_msg
+        error_msg=$(echo "$error_output" | head -1 | cut -c1-60)
+        if [ -n "$error_msg" ]; then
+            tmux display-message "Failed: $error_msg"
+        else
+            tmux display-message "Failed to create worktree (exit $exit_code)"
+        fi
+    fi
+}
+
+# Create new worktree with a new branch (from "New" option in Add menu)
 create_new_worktree() {
     require_git_repo || return 1
     local branch="$1"
     debug_log "create_new_worktree called: branch='$branch'"
     local project_name
     project_name=$(get_project_name)
-    local session_name="${project_name}-${branch//\//_}"
-    session_name="${session_name//./_}"
-    session_name="${session_name//:/_}"
-    local worktree_path="$WORKTREE_BASE/$project_name/$branch"
+    _worktree_vars "$branch" "$project_name"
+    local session_name="$_WT_SESSION"
+    local worktree_path="$_WT_PATH"
     debug_log "create_new_worktree: project=$project_name session=$session_name path=$worktree_path"
 
     # Ensure project directory exists
@@ -536,25 +619,7 @@ create_new_worktree() {
 
     if [ $exit_code -eq 0 ]; then
         debug_log "create_new_worktree: worktree created at $worktree_path"
-        # Copy ignored files if enabled
-        if [ "$COPY_IGNORED" = "on" ]; then
-            copy_ignored_files "$worktree_path"
-        fi
-        # Run post-create hook (non-fatal)
-        _run_post_create_hook "$branch" "$project_name" "$worktree_path" || true
-
-        if tmux new-session -d -c "$worktree_path" -s "$session_name" \
-               -e "TMUX_WORKTREE=1" \
-               -e "TMUX_WORKTREE_PROJECT=$project_name" \
-               -e "TMUX_WORKTREE_BRANCH=$branch" \
-               -e "TMUX_WORKTREE_PATH=$worktree_path" && \
-           tmux switch-client -t "$session_name"; then
-            debug_log "create_new_worktree: SUCCESS session=$session_name"
-            tmux display-message "Created worktree and session: $session_name"
-        else
-            debug_log "create_new_worktree: worktree OK but session FAILED"
-            tmux display-message "Worktree created but session failed - try 'tmux new -s $session_name'"
-        fi
+        _setup_worktree "$branch" "$worktree_path" "$session_name" "$project_name"
     else
         debug_log "create_new_worktree: FAILED git worktree add: $error_output"
         local error_msg
@@ -813,6 +878,7 @@ main() {
         "show_add_worktree_menu") show_add_worktree_menu "$2" "$3" "$4" ;;
         "show_remove_worktree_menu") show_remove_worktree_menu "$2" "$3" ;;
         "remove_worktree") remove_worktree "$2" "$3" "$4" "$5" "$6" ;;
+        "add_worktree") add_worktree "$2" "$3" ;;
         "create_new_worktree") create_new_worktree "$2" ;;
         "fetch_remote_branches") fetch_remote_branches ;;
         "show_options_menu") show_options_menu ;;

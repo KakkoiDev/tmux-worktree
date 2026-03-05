@@ -191,7 +191,7 @@ teardown() {
     assert_success
 }
 
-@test "get_branch_data includes cd prefix with pane_cwd" {
+@test "get_branch_data routes through add_worktree dispatch" {
     # Create a branch so get_branch_data has output
     cd "$TEST_REPO_DIR"
     git branch test-cwd-branch
@@ -199,22 +199,20 @@ teardown() {
     run get_branch_data 1 "" 0
     assert_success
 
-    # Output should contain "cd" prefix with the test repo path
-    # because get_branch_data passes pane_cwd=$(pwd) to awk
-    [[ "$output" == *"cd "* ]]
-    [[ "$output" == *"$TEST_REPO_DIR"* ]]
+    # Output should route through add_worktree (CWD is resolved by main())
+    assert_contains "$output" "add_worktree"
+    assert_contains "$output" "worktree_manager.sh"
 }
 
-@test "get_branch_data cd prefix uses current working directory" {
+@test "get_branch_data includes branch name in dispatch" {
     cd "$TEST_REPO_DIR"
     git branch test-cwd-verify
 
-    local before_output
-    before_output=$(get_branch_data 1 "" 0)
+    local output
+    output=$(get_branch_data 1 "" 0)
 
-    # The cd prefix in the awk output should reference the pane CWD
-    # This ensures run-shell commands start in the correct directory
-    [[ "$before_output" == *"cd"*"$TEST_REPO_DIR"*"git worktree add"* ]]
+    # The dispatch command should include the branch name
+    [[ "$output" == *"add_worktree"*"test-cwd-verify"* ]]
 }
 
 @test "main resolves pane CWD before dispatching commands" {
