@@ -737,8 +737,8 @@ show_options_menu() {
     options="$options\"Debug: $DEBUG\" \"\" \"run-shell \\\"'$script_path' set_option @worktree-debug $next_debug\\\"\" "
     options="$options\"Items/page: $ITEMS_PER_PAGE\" \"\" \"run-shell \\\"'$script_path' set_option @worktree-items-per-page $next_items\\\"\" "
     options="$options\"Fetch timeout: ${FETCH_TIMEOUT}s\" \"\" \"run-shell \\\"'$script_path' set_option @worktree-fetch-timeout $next_timeout\\\"\" "
-    options="$options\"Hook: $hook_display\" \"\" \"command-prompt -p 'Post-create hook:' 'run-shell \\\"'\\'''$script_path' set_option @worktree-post-create-cmd %1'\\''\\\"'\" "
-    options="$options\"Path: $dp\" \"\" \"command-prompt -p 'Worktree path:' 'run-shell \\\"'\\'''$script_path' set_option @worktree-path %1'\\''\\\"'\" "
+    options="$options\"Hook: $hook_display\" \"\" \"command-prompt -I '$POST_CREATE_CMD' -p 'Post-create hook:' 'run-shell \\\"'\\'''$script_path' set_option @worktree-post-create-cmd %1'\\''\\\"'\" "
+    options="$options\"Path: $dp\" \"\" \"command-prompt -I '$WORKTREE_BASE' -p 'Worktree path:' 'run-shell \\\"'\\'''$script_path' set_option @worktree-path %1'\\''\\\"'\" "
     options="$options\"← Back\" \"$KEY_BACK\" \"run-shell \\\"'$script_path' tmux_worktrees_main\\\"\""
 
     display_menu "Options" "$options"
