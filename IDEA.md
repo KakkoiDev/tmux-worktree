@@ -19,14 +19,20 @@ Copy `.gitignore`d build artifacts (node_modules, dist, .env) from the primary w
 ### Post-create hook
 Run a command after worktree creation via `@worktree-post-create-cmd`. Example: `npm install && cp ../.env .`
 
+**Status:** Implemented
+
 ### Project config file
 Support `.tmux-worktree.conf` in repo root for team-shared settings (hooks, path template, copy-ignored patterns).
 
-### Merge/cleanup workflow
-Menu option to merge branch back to main, then remove worktree + session in one step.
+**Status:** Implemented
 
 ### Template variables in hooks
 Support `{{ branch }}`, `{{ project }}`, `{{ path }}` in hook commands.
+
+**Status:** Implemented
+
+### Merge/cleanup workflow
+Menu option to merge branch back to main, then remove worktree + session in one step.
 
 ## Low Priority / Higher Effort
 

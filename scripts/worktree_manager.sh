@@ -540,6 +540,9 @@ create_new_worktree() {
         if [ "$COPY_IGNORED" = "on" ]; then
             copy_ignored_files "$worktree_path"
         fi
+        # Run post-create hook (non-fatal)
+        _run_post_create_hook "$branch" "$project_name" "$worktree_path" || true
+
         if tmux new-session -d -c "$worktree_path" -s "$session_name" \
                -e "TMUX_WORKTREE=1" \
                -e "TMUX_WORKTREE_PROJECT=$project_name" \
@@ -717,11 +720,24 @@ show_options_menu() {
     local dp
     dp=$(display_path "$WORKTREE_BASE")
 
+    # Truncate hook display
+    local hook_display
+    if [ -n "$POST_CREATE_CMD" ]; then
+        if [ ${#POST_CREATE_CMD} -gt 30 ]; then
+            hook_display="${POST_CREATE_CMD:0:27}..."
+        else
+            hook_display="$POST_CREATE_CMD"
+        fi
+    else
+        hook_display="(none)"
+    fi
+
     local options=""
     options="\"Copy ignored: $COPY_IGNORED\" \"\" \"run-shell \\\"'$script_path' set_option @worktree-copy-ignored $next_copy_ignored\\\"\" "
     options="$options\"Debug: $DEBUG\" \"\" \"run-shell \\\"'$script_path' set_option @worktree-debug $next_debug\\\"\" "
     options="$options\"Items/page: $ITEMS_PER_PAGE\" \"\" \"run-shell \\\"'$script_path' set_option @worktree-items-per-page $next_items\\\"\" "
     options="$options\"Fetch timeout: ${FETCH_TIMEOUT}s\" \"\" \"run-shell \\\"'$script_path' set_option @worktree-fetch-timeout $next_timeout\\\"\" "
+    options="$options\"Hook: $hook_display\" \"\" \"command-prompt -p 'Post-create hook:' 'run-shell \\\"'\\'''$script_path' set_option @worktree-post-create-cmd %1'\\''\\\"'\" "
     options="$options\"Path: $dp\" \"\" \"command-prompt -p 'Worktree path:' 'run-shell \\\"'\\'''$script_path' set_option @worktree-path %1'\\''\\\"'\" "
     options="$options\"← Back\" \"$KEY_BACK\" \"run-shell \\\"'$script_path' tmux_worktrees_main\\\"\""
 

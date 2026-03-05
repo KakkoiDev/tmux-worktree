@@ -112,6 +112,11 @@ teardown() {
     assert_contains "$CAPTURED_MENU_OPTIONS" '"Path:'
 }
 
+@test "options menu generates Hook option" {
+    show_options_menu
+    assert_contains "$CAPTURED_MENU_OPTIONS" '"Hook:'
+}
+
 @test "options menu generates Back option" {
     show_options_menu
     assert_contains "$CAPTURED_MENU_OPTIONS" 'Back'
@@ -122,7 +127,7 @@ teardown() {
 # ==============================================================================
 
 @test "options menu shows current COPY_IGNORED value" {
-    export COPY_IGNORED="off"
+    tmux_set_option "@worktree-copy-ignored" "off"
     show_options_menu
     assert_contains "$CAPTURED_MENU_OPTIONS" 'Copy ignored: off'
 }

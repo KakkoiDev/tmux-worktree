@@ -83,6 +83,24 @@ set -g @worktree-copy-ignored "on"
 
 Uses Copy-on-Write on macOS for near-instant copies regardless of size.
 
+### Run commands after worktree creation
+
+Set a post-create hook to run automatically in every new worktree:
+
+```bash
+set -g @worktree-post-create-cmd "npm install && cp ../.env ."
+```
+
+Template variables are expanded before execution:
+
+| Variable | Replaced with |
+|----------|---------------|
+| `{{ branch }}` | Branch name |
+| `{{ project }}` | Project/repo name |
+| `{{ path }}` | Worktree directory path |
+
+The hook runs with a 120-second timeout. On failure, a warning is shown but the worktree is kept. Edit at runtime via `prefix + W > Options > Hook`.
+
 ## Keys
 
 | Key | Action |
@@ -116,7 +134,7 @@ Sessions are named `{project}-{branch}` (e.g., `myproject-feature-login`).
 
 ## Configuration
 
-Works out of the box. Settings can be changed in `tmux.conf` or at runtime via `prefix + W → Options`.
+Works out of the box. Settings can be changed in `tmux.conf` or at runtime via `prefix + W > Options`.
 
 ```bash
 # Change keybinding (default: W)
@@ -130,7 +148,22 @@ set -g @worktree-items-per-page "20"
 
 # Copy .gitignore'd files to new worktrees (default: off)
 set -g @worktree-copy-ignored "on"
+
+# Run command after worktree creation (default: none)
+set -g @worktree-post-create-cmd "npm install"
 ```
+
+### Project config file
+
+Commit a `.tmux-worktree.conf` in your repo root to share settings with your team:
+
+```conf
+# .tmux-worktree.conf - team-shared defaults
+post-create-cmd = npm install && cp ../.env .
+copy-ignored = on
+```
+
+Project config values apply only when the corresponding tmux option has not been explicitly set. Explicit tmux options (from `tmux.conf` or the Options menu) always take priority.
 
 <details>
 <summary>All keybinding options</summary>
