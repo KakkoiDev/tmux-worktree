@@ -686,6 +686,21 @@ _cycle_value() {
     echo "${values[0]}"
 }
 
+# Set a tmux option, persist it to state file, and re-show options menu
+# Usage: set_option "@worktree-copy-ignored" "on"
+set_option() {
+    local key="$1"
+    local value="$2"
+
+    if [ -n "$TMUX_SOCKET" ]; then
+        tmux -L "$TMUX_SOCKET" set-option -g "$key" "$value"
+    else
+        tmux set-option -g "$key" "$value"
+    fi
+    save_option "$key" "$value"
+    show_options_menu
+}
+
 # Show options menu for runtime configuration
 # Each item sets a tmux option and re-displays the menu with updated values
 show_options_menu() {
@@ -703,11 +718,11 @@ show_options_menu() {
     dp=$(display_path "$WORKTREE_BASE")
 
     local options=""
-    options="\"Copy ignored: $COPY_IGNORED\" \"\" \"set-option -g @worktree-copy-ignored $next_copy_ignored ; run-shell \\\"'$script_path' show_options_menu\\\"\" "
-    options="$options\"Debug: $DEBUG\" \"\" \"set-option -g @worktree-debug $next_debug ; run-shell \\\"'$script_path' show_options_menu\\\"\" "
-    options="$options\"Items/page: $ITEMS_PER_PAGE\" \"\" \"set-option -g @worktree-items-per-page $next_items ; run-shell \\\"'$script_path' show_options_menu\\\"\" "
-    options="$options\"Fetch timeout: ${FETCH_TIMEOUT}s\" \"\" \"set-option -g @worktree-fetch-timeout $next_timeout ; run-shell \\\"'$script_path' show_options_menu\\\"\" "
-    options="$options\"Path: $dp\" \"\" \"command-prompt -p 'Worktree path:' 'set-option -g @worktree-path '\\''%1'\\'' ; run-shell \\\"'$script_path' show_options_menu\\\"'\" "
+    options="\"Copy ignored: $COPY_IGNORED\" \"\" \"run-shell \\\"'$script_path' set_option @worktree-copy-ignored $next_copy_ignored\\\"\" "
+    options="$options\"Debug: $DEBUG\" \"\" \"run-shell \\\"'$script_path' set_option @worktree-debug $next_debug\\\"\" "
+    options="$options\"Items/page: $ITEMS_PER_PAGE\" \"\" \"run-shell \\\"'$script_path' set_option @worktree-items-per-page $next_items\\\"\" "
+    options="$options\"Fetch timeout: ${FETCH_TIMEOUT}s\" \"\" \"run-shell \\\"'$script_path' set_option @worktree-fetch-timeout $next_timeout\\\"\" "
+    options="$options\"Path: $dp\" \"\" \"command-prompt -p 'Worktree path:' 'run-shell \\\"'\\'''$script_path' set_option @worktree-path %1'\\''\\\"'\" "
     options="$options\"← Back\" \"$KEY_BACK\" \"run-shell \\\"'$script_path' tmux_worktrees_main\\\"\""
 
     display_menu "Options" "$options"
@@ -785,6 +800,7 @@ main() {
         "create_new_worktree") create_new_worktree "$2" ;;
         "fetch_remote_branches") fetch_remote_branches ;;
         "show_options_menu") show_options_menu ;;
+        "set_option") set_option "$2" "$3" ;;
         "version") show_version ;;
         "health_check") health_check ;;
         *) echo "Unknown command: $1" ;;

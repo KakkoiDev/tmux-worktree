@@ -242,6 +242,56 @@ reload_config() {
 }
 
 # ==============================================================================
+# OPTIONS PERSISTENCE
+# ==============================================================================
+
+# Get state file path for persisting options across tmux restarts
+# Override with TMUX_WORKTREE_STATE_FILE for testing
+_get_state_file() {
+    echo "${TMUX_WORKTREE_STATE_FILE:-$HOME/.tmux-worktree/options.conf}"
+}
+
+# Save a tmux option to the state file
+# Usage: save_option "@worktree-copy-ignored" "on"
+save_option() {
+    local key="$1"
+    local value="$2"
+    local state_file
+    state_file=$(_get_state_file)
+
+    mkdir -p "$(dirname "$state_file")" 2>/dev/null || true
+
+    # Remove existing entry for this key, then append
+    if [ -f "$state_file" ]; then
+        local tmp="${state_file}.tmp"
+        grep -v "^${key}=" "$state_file" > "$tmp" 2>/dev/null || true
+        mv "$tmp" "$state_file"
+    fi
+    echo "${key}=${value}" >> "$state_file"
+}
+
+# Restore saved options from state file into tmux
+restore_saved_options() {
+    local state_file
+    state_file=$(_get_state_file)
+
+    [ -f "$state_file" ] || return 0
+
+    local key value
+    while IFS='=' read -r key value; do
+        # Skip empty lines and comments
+        [ -z "$key" ] && continue
+        [[ "$key" == \#* ]] && continue
+
+        if [ -n "$TMUX_SOCKET" ]; then
+            tmux -L "$TMUX_SOCKET" set-option -g "$key" "$value" 2>/dev/null || true
+        else
+            tmux set-option -g "$key" "$value" 2>/dev/null || true
+        fi
+    done < "$state_file"
+}
+
+# ==============================================================================
 # DEBUG LOGGING
 # ==============================================================================
 

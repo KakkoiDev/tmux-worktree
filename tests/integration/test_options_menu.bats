@@ -149,29 +149,35 @@ teardown() {
 # OPTIONS MENU COMMANDS
 # ==============================================================================
 
-@test "options menu contains set-option for copy-ignored" {
+@test "options menu uses set_option dispatch for copy-ignored" {
     show_options_menu
-    assert_contains "$CAPTURED_MENU_OPTIONS" 'set-option -g @worktree-copy-ignored'
+    assert_contains "$CAPTURED_MENU_OPTIONS" 'set_option @worktree-copy-ignored'
 }
 
-@test "options menu contains set-option for debug" {
+@test "options menu uses set_option dispatch for debug" {
     show_options_menu
-    assert_contains "$CAPTURED_MENU_OPTIONS" 'set-option -g @worktree-debug'
+    assert_contains "$CAPTURED_MENU_OPTIONS" 'set_option @worktree-debug'
 }
 
-@test "options menu contains set-option for items-per-page" {
+@test "options menu uses set_option dispatch for items-per-page" {
     show_options_menu
-    assert_contains "$CAPTURED_MENU_OPTIONS" 'set-option -g @worktree-items-per-page'
+    assert_contains "$CAPTURED_MENU_OPTIONS" 'set_option @worktree-items-per-page'
 }
 
-@test "options menu contains set-option for fetch-timeout" {
+@test "options menu uses set_option dispatch for fetch-timeout" {
     show_options_menu
-    assert_contains "$CAPTURED_MENU_OPTIONS" 'set-option -g @worktree-fetch-timeout'
+    assert_contains "$CAPTURED_MENU_OPTIONS" 'set_option @worktree-fetch-timeout'
 }
 
-@test "options menu contains show_options_menu callback" {
+@test "options menu uses set_option dispatch for path" {
     show_options_menu
-    assert_contains "$CAPTURED_MENU_OPTIONS" 'show_options_menu'
+    assert_contains "$CAPTURED_MENU_OPTIONS" 'set_option @worktree-path'
+}
+
+@test "options menu uses set_option dispatch (not inline set-option)" {
+    show_options_menu
+    assert_contains "$CAPTURED_MENU_OPTIONS" 'set_option'
+    refute_contains "$CAPTURED_MENU_OPTIONS" 'set-option -g'
 }
 
 @test "options menu contains tmux_worktrees_main for Back" {
@@ -184,9 +190,6 @@ teardown() {
 # ==============================================================================
 
 @test "script CLI: show_options_menu is a recognized command" {
-    # Verify the dispatch case handles show_options_menu
-    # We can't fully test it without a tmux client, but we can verify
-    # the function exists and is callable
     run bash -c "
         source '$SCRIPTS_DIR/helpers.sh'
         source '$SCRIPTS_DIR/filter.sh'
@@ -196,4 +199,121 @@ teardown() {
     "
     assert_success
     assert_contains "$output" "function"
+}
+
+@test "script CLI: set_option is a recognized command" {
+    run bash -c "
+        source '$SCRIPTS_DIR/helpers.sh'
+        source '$SCRIPTS_DIR/filter.sh'
+        load_config
+        source '$SCRIPTS_DIR/worktree_manager.sh'
+        type set_option
+    "
+    assert_success
+    assert_contains "$output" "function"
+}
+
+# ==============================================================================
+# OPTIONS PERSISTENCE TESTS
+# ==============================================================================
+
+@test "save_option writes key=value to state file" {
+    export TMUX_WORKTREE_STATE_FILE="/tmp/tmux-worktree-test-persist-${BATS_TEST_NUMBER}-$$"
+
+    save_option "@worktree-debug" "on"
+
+    [ -f "$TMUX_WORKTREE_STATE_FILE" ]
+    run cat "$TMUX_WORKTREE_STATE_FILE"
+    assert_contains "$output" "@worktree-debug=on"
+
+    rm -f "$TMUX_WORKTREE_STATE_FILE"
+}
+
+@test "save_option overwrites existing key" {
+    export TMUX_WORKTREE_STATE_FILE="/tmp/tmux-worktree-test-persist-${BATS_TEST_NUMBER}-$$"
+
+    save_option "@worktree-debug" "on"
+    save_option "@worktree-debug" "off"
+
+    # Should have exactly one entry for the key
+    local count
+    count=$(grep -c "@worktree-debug" "$TMUX_WORKTREE_STATE_FILE")
+    assert_equal "1" "$count"
+
+    run cat "$TMUX_WORKTREE_STATE_FILE"
+    assert_contains "$output" "@worktree-debug=off"
+
+    rm -f "$TMUX_WORKTREE_STATE_FILE"
+}
+
+@test "save_option preserves other keys" {
+    export TMUX_WORKTREE_STATE_FILE="/tmp/tmux-worktree-test-persist-${BATS_TEST_NUMBER}-$$"
+
+    save_option "@worktree-debug" "on"
+    save_option "@worktree-copy-ignored" "on"
+    save_option "@worktree-debug" "off"
+
+    run cat "$TMUX_WORKTREE_STATE_FILE"
+    assert_contains "$output" "@worktree-copy-ignored=on"
+    assert_contains "$output" "@worktree-debug=off"
+
+    rm -f "$TMUX_WORKTREE_STATE_FILE"
+}
+
+@test "restore_saved_options sets tmux options from state file" {
+    export TMUX_WORKTREE_STATE_FILE="/tmp/tmux-worktree-test-persist-${BATS_TEST_NUMBER}-$$"
+
+    echo "@worktree-debug=on" > "$TMUX_WORKTREE_STATE_FILE"
+    echo "@worktree-copy-ignored=on" >> "$TMUX_WORKTREE_STATE_FILE"
+
+    restore_saved_options
+
+    run tmux_get_option "@worktree-debug"
+    assert_equal "on" "$output"
+
+    run tmux_get_option "@worktree-copy-ignored"
+    assert_equal "on" "$output"
+
+    rm -f "$TMUX_WORKTREE_STATE_FILE"
+}
+
+@test "restore_saved_options handles missing state file" {
+    export TMUX_WORKTREE_STATE_FILE="/tmp/nonexistent-state-file-$$"
+
+    run restore_saved_options
+    assert_success
+}
+
+@test "set_option sets tmux option and persists to file" {
+    export TMUX_WORKTREE_STATE_FILE="/tmp/tmux-worktree-test-persist-${BATS_TEST_NUMBER}-$$"
+
+    set_option "@worktree-debug" "on"
+
+    # Verify tmux option was set
+    run tmux_get_option "@worktree-debug"
+    assert_equal "on" "$output"
+
+    # Verify state file was written
+    run cat "$TMUX_WORKTREE_STATE_FILE"
+    assert_contains "$output" "@worktree-debug=on"
+
+    rm -f "$TMUX_WORKTREE_STATE_FILE"
+}
+
+@test "options survive config reload via state file" {
+    export TMUX_WORKTREE_STATE_FILE="/tmp/tmux-worktree-test-persist-${BATS_TEST_NUMBER}-$$"
+
+    # Save an option
+    save_option "@worktree-copy-ignored" "on"
+
+    # Clear the tmux option
+    tmux_set_option "@worktree-copy-ignored" "off"
+
+    # Restore from file (simulates plugin reload)
+    restore_saved_options
+
+    run tmux_get_option "@worktree-copy-ignored"
+    assert_equal "on" "$output"
+
+    rm -f "$TMUX_WORKTREE_STATE_FILE"
 }

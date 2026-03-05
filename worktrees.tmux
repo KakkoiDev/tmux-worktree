@@ -19,6 +19,9 @@ if ! ensure_tmux_version; then
     exit 1
 fi
 
+# Restore persisted options before loading config
+restore_saved_options
+
 # Load configuration
 load_config
 
