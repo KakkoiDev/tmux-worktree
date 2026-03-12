@@ -288,3 +288,176 @@ teardown() {
     first_line=$(echo "$output" | head -1)
     [[ "$first_line" =~ ^[0-9]+$ ]]
 }
+
+# ==============================================================================
+# REMOVABLE DATA - DETACHED HEAD WORKTREES
+# ==============================================================================
+
+@test "detached HEAD worktree appears in removable data" {
+    local project
+    project=$(get_project_name)
+    local wt_path="$WORKTREE_BASE/$project/test-detached"
+    mkdir -p "$(dirname "$wt_path")"
+
+    # Create worktree, detach HEAD, delete branch
+    git worktree add -q "$wt_path" -b "test-detached-branch"
+    git -C "$wt_path" checkout --detach HEAD 2>/dev/null
+    git branch -D "test-detached-branch" 2>/dev/null
+
+    run get_removable_worktree_data 1 ""
+    assert_success
+    assert_contains "$output" "HEAD@"
+
+    # Cleanup
+    git worktree remove --force "$wt_path" 2>/dev/null || true
+}
+
+@test "detached HEAD worktree shows short SHA in menu" {
+    local project
+    project=$(get_project_name)
+    local wt_path="$WORKTREE_BASE/$project/test-detached-sha"
+    mkdir -p "$(dirname "$wt_path")"
+
+    git worktree add -q "$wt_path" -b "test-detached-sha"
+    local head_sha
+    head_sha=$(git -C "$wt_path" rev-parse --short=7 HEAD)
+    git -C "$wt_path" checkout --detach HEAD 2>/dev/null
+    git branch -D "test-detached-sha" 2>/dev/null
+
+    run get_removable_worktree_data 1 ""
+    assert_success
+    assert_contains "$output" "HEAD@${head_sha}"
+
+    # Cleanup
+    git worktree remove --force "$wt_path" 2>/dev/null || true
+}
+
+@test "detached HEAD worktree is filterable" {
+    local project
+    project=$(get_project_name)
+    local wt_path="$WORKTREE_BASE/$project/test-detached-filter"
+    mkdir -p "$(dirname "$wt_path")"
+
+    git worktree add -q "$wt_path" -b "test-detached-filter"
+    git -C "$wt_path" checkout --detach HEAD 2>/dev/null
+    git branch -D "test-detached-filter" 2>/dev/null
+
+    # Filter for HEAD@ should match
+    run get_removable_worktree_data 1 "HEAD*"
+    assert_success
+    assert_contains "$output" "HEAD@"
+
+    # Filter for non-matching should exclude
+    run get_removable_worktree_data 1 "nonexistent-xyz"
+    assert_success
+    refute_contains "$output" "HEAD@"
+
+    # Cleanup
+    git worktree remove --force "$wt_path" 2>/dev/null || true
+}
+
+# ==============================================================================
+# REMOVABLE DATA - PRUNABLE WORKTREES (deleted directory)
+# ==============================================================================
+
+@test "worktree with deleted directory still appears in removable data" {
+    local project
+    project=$(get_project_name)
+    local wt_path="$WORKTREE_BASE/$project/test-prunable"
+    mkdir -p "$(dirname "$wt_path")"
+
+    git worktree add -q "$wt_path" -b "test-prunable-branch"
+
+    # Delete the directory but keep git's worktree entry
+    rm -rf "$wt_path"
+
+    run get_removable_worktree_data 1 ""
+    assert_success
+    assert_contains "$output" "test-prunable-branch"
+
+    # Cleanup
+    git worktree prune
+    git branch -D "test-prunable-branch" 2>/dev/null || true
+}
+
+@test "worktree with deleted directory is filterable by branch name" {
+    local project
+    project=$(get_project_name)
+    local wt_path="$WORKTREE_BASE/$project/test-prunable-filter"
+    mkdir -p "$(dirname "$wt_path")"
+
+    git worktree add -q "$wt_path" -b "test-prunable-filter"
+    rm -rf "$wt_path"
+
+    run get_removable_worktree_data 1 "test-prunable*"
+    assert_success
+    assert_contains "$output" "test-prunable-filter"
+
+    # Cleanup
+    git worktree prune
+    git branch -D "test-prunable-filter" 2>/dev/null || true
+}
+
+# ==============================================================================
+# REMOVABLE DATA - BRANCH WITH SLASHES
+# ==============================================================================
+
+@test "worktree with slashes in branch name appears in removable data" {
+    local project
+    project=$(get_project_name)
+    local wt_path="$WORKTREE_BASE/$project/user/TASK-12345"
+    mkdir -p "$(dirname "$wt_path")"
+
+    git worktree add -q "$wt_path" -b "user/TASK-12345"
+
+    run get_removable_worktree_data 1 ""
+    assert_success
+    assert_contains "$output" "user/TASK-12345"
+
+    # Cleanup
+    git worktree remove --force "$wt_path" 2>/dev/null || true
+    git branch -D "user/TASK-12345" 2>/dev/null || true
+}
+
+@test "worktree with slashes in branch name is filterable" {
+    local project
+    project=$(get_project_name)
+    local wt_path="$WORKTREE_BASE/$project/user/TASK-99999"
+    mkdir -p "$(dirname "$wt_path")"
+
+    git worktree add -q "$wt_path" -b "user/TASK-99999"
+
+    run get_removable_worktree_data 1 "user/TASK*"
+    assert_success
+    assert_contains "$output" "user/TASK-99999"
+
+    run get_removable_worktree_data 1 "*99999"
+    assert_success
+    assert_contains "$output" "user/TASK-99999"
+
+    # Cleanup
+    git worktree remove --force "$wt_path" 2>/dev/null || true
+    git branch -D "user/TASK-99999" 2>/dev/null || true
+}
+
+@test "worktree with slashes in branch name generates valid session name" {
+    local project
+    project=$(get_project_name)
+    local wt_path="$WORKTREE_BASE/$project/user/TASK-77777"
+    mkdir -p "$(dirname "$wt_path")"
+
+    git worktree add -q "$wt_path" -b "user/TASK-77777"
+
+    run get_removable_worktree_data 1 ""
+    assert_success
+    # Session name should have slashes converted to underscores
+    # and dots converted to underscores (AWK applies gsub on full session_name)
+    local expected_session="${project}-user_TASK-77777"
+    expected_session="${expected_session//./_}"
+    expected_session="${expected_session//:/_}"
+    assert_contains "$output" "$expected_session"
+
+    # Cleanup
+    git worktree remove --force "$wt_path" 2>/dev/null || true
+    git branch -D "user/TASK-77777" 2>/dev/null || true
+}
