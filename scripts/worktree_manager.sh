@@ -78,8 +78,14 @@ fetch_remote_branches() {
     tmux display-message "Fetching remote branches..."
     debug_log "Starting git fetch in $(pwd) with timeout ${timeout_seconds}s"
 
+    # Build fetch command (--prune only when explicitly enabled)
+    local fetch_args="--all"
+    if [ "${FETCH_PRUNE:-off}" = "on" ]; then
+        fetch_args="--all --prune"
+    fi
+
     # Run git fetch with timeout, capture stderr
-    if run_with_timeout "$timeout_seconds" git fetch --all --prune 2>"$error_file"; then
+    if run_with_timeout "$timeout_seconds" git fetch $fetch_args 2>"$error_file"; then
         debug_log "Fetch completed successfully"
         tmux display-message "Remote branches fetched successfully"
         rm -f "$error_file"
@@ -776,11 +782,12 @@ show_options_menu() {
     local script_path="$SCRIPT_DIR/worktree_manager.sh"
 
     # Compute next values for toggles and cycles
-    local next_copy_ignored next_debug next_items next_timeout
+    local next_copy_ignored next_debug next_items next_timeout next_fetch_prune
     next_copy_ignored=$(_cycle_value "$COPY_IGNORED" "off" "on")
     next_debug=$(_cycle_value "$DEBUG" "off" "on")
     next_items=$(_cycle_value "$ITEMS_PER_PAGE" "10" "15" "20" "25")
     next_timeout=$(_cycle_value "$FETCH_TIMEOUT" "15" "30" "60" "120")
+    next_fetch_prune=$(_cycle_value "$FETCH_PRUNE" "off" "on")
 
     local dp
     dp=$(display_path "$WORKTREE_BASE")
@@ -801,6 +808,7 @@ show_options_menu() {
     options="\"Copy ignored: $COPY_IGNORED\" \"\" \"run-shell \\\"'$script_path' set_option @worktree-copy-ignored $next_copy_ignored\\\"\" "
     options="$options\"Debug: $DEBUG\" \"\" \"run-shell \\\"'$script_path' set_option @worktree-debug $next_debug\\\"\" "
     options="$options\"Items/page: $ITEMS_PER_PAGE\" \"\" \"run-shell \\\"'$script_path' set_option @worktree-items-per-page $next_items\\\"\" "
+    options="$options\"Fetch prune: $FETCH_PRUNE\" \"\" \"run-shell \\\"'$script_path' set_option @worktree-fetch-prune $next_fetch_prune\\\"\" "
     options="$options\"Fetch timeout: ${FETCH_TIMEOUT}s\" \"\" \"run-shell \\\"'$script_path' set_option @worktree-fetch-timeout $next_timeout\\\"\" "
     options="$options\"Hook: $hook_display\" \"\" \"command-prompt -I '$POST_CREATE_CMD' -p 'Post-create hook:' 'run-shell \\\"'\\'''$script_path' set_option @worktree-post-create-cmd %1'\\''\\\"'\" "
     options="$options\"Path: $dp\" \"\" \"command-prompt -I '$WORKTREE_BASE' -p 'Worktree path:' 'run-shell \\\"'\\'''$script_path' set_option @worktree-path %1'\\''\\\"'\" "

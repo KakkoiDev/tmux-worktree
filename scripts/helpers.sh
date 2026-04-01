@@ -174,12 +174,20 @@ _load_config_from_tmux() {
     KEY_QUIT=$(get_tmux_option "@worktree-key-quit" "q")
     KEY_NEW=$(get_tmux_option "@worktree-key-new" "n")
     KEY_OPTIONS=$(get_tmux_option "@worktree-key-options" "o")
+    FETCH_PRUNE=$(get_tmux_option "@worktree-fetch-prune" "off")
     COPY_IGNORED=$(get_tmux_option "@worktree-copy-ignored" "off")
     POST_CREATE_CMD=$(get_tmux_option "@worktree-post-create-cmd" "")
 
     # Track which options were explicitly set (non-empty raw value)
     _EXPLICIT_OPTIONS=""
     local _raw_val
+    if [ -n "$TMUX_SOCKET" ]; then
+        _raw_val=$(tmux -L "$TMUX_SOCKET" show-option -gqv "@worktree-fetch-prune" 2>/dev/null)
+    else
+        _raw_val=$(tmux show-option -gqv "@worktree-fetch-prune" 2>/dev/null)
+    fi
+    [ -n "$_raw_val" ] && _EXPLICIT_OPTIONS="${_EXPLICIT_OPTIONS}fetch-prune "
+
     if [ -n "$TMUX_SOCKET" ]; then
         _raw_val=$(tmux -L "$TMUX_SOCKET" show-option -gqv "@worktree-copy-ignored" 2>/dev/null)
     else
@@ -213,6 +221,7 @@ KEY_BACK='$KEY_BACK'
 KEY_QUIT='$KEY_QUIT'
 KEY_NEW='$KEY_NEW'
 KEY_OPTIONS='$KEY_OPTIONS'
+FETCH_PRUNE='$FETCH_PRUNE'
 COPY_IGNORED='$COPY_IGNORED'
 POST_CREATE_CMD='$POST_CREATE_CMD'
 CACHE
@@ -327,6 +336,12 @@ _load_project_config() {
                     debug_log "Project config: post-create-cmd=$value"
                 fi
                 ;;
+            fetch-prune)
+                if [[ "$_EXPLICIT_OPTIONS" != *"fetch-prune"* ]]; then
+                    FETCH_PRUNE="$value"
+                    debug_log "Project config: fetch-prune=$value"
+                fi
+                ;;
             copy-ignored)
                 if [[ "$_EXPLICIT_OPTIONS" != *"copy-ignored"* ]]; then
                     COPY_IGNORED="$value"
@@ -352,7 +367,7 @@ load_config() {
         _load_config_from_tmux "$cache_file"
     fi
 
-    export WORKTREE_BASE ITEMS_PER_PAGE FETCH_TIMEOUT KEYBINDING DEBUG
+    export WORKTREE_BASE ITEMS_PER_PAGE FETCH_TIMEOUT FETCH_PRUNE KEYBINDING DEBUG
     export KEY_LIST KEY_ADD KEY_REMOVE
     export KEY_NEXT KEY_PREV KEY_FILTER KEY_CLEAR_FILTER KEY_FETCH KEY_BACK KEY_QUIT KEY_NEW
     export KEY_OPTIONS COPY_IGNORED POST_CREATE_CMD

@@ -149,6 +149,9 @@ set -g @worktree-items-per-page "20"
 # Copy .gitignore'd files to new worktrees (default: off)
 set -g @worktree-copy-ignored "on"
 
+# Prune remote-tracking branches deleted upstream on fetch (default: off)
+set -g @worktree-fetch-prune "on"
+
 # Run command after worktree creation (default: none)
 set -g @worktree-post-create-cmd "npm install"
 ```
@@ -161,6 +164,7 @@ Commit a `.tmux-worktree.conf` in your repo root to share settings with your tea
 # .tmux-worktree.conf - team-shared defaults
 post-create-cmd = npm install && cp ../.env .
 copy-ignored = on
+fetch-prune = off
 ```
 
 Project config values apply only when the corresponding tmux option has not been explicitly set. Explicit tmux options (from `tmux.conf` or the Options menu) always take priority.
