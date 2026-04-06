@@ -48,6 +48,14 @@ prefix + W  →  List  →  select worktree
 
 Creates a session if needed, then switches to it.
 
+### Jump to a recent worktree
+
+```
+prefix + W  →  List  →  Recent  →  select worktree
+```
+
+Shows worktrees you have recently switched to or created, ordered newest first. Stale entries (manually deleted worktrees) are filtered out automatically, and entries are cleaned up when a worktree is removed via the Remove menu.
+
 ### Find a branch
 
 ```
@@ -113,7 +121,7 @@ The hook runs with a 120-second timeout. On failure, a warning is shown but the 
 | `f` | Filter |
 | `c` | Clear filter |
 | `n` | New branch (in Add menu) |
-| `r` | Fetch remote (in Add menu) |
+| `r` | Recent worktrees (in List menu) / Fetch remote (in Add menu) |
 | `b` | Back |
 | `q` | Quit |
 
