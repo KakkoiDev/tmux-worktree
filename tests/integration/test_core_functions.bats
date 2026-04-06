@@ -136,9 +136,9 @@ teardown() {
 
     run get_worktree_data 1
     assert_success
-    # Should contain tmux session commands
+    # Should contain switch_worktree dispatch command
     assert_contains "$output" "run-shell"
-    assert_contains "$output" "switch-client"
+    assert_contains "$output" "switch_worktree"
 }
 
 # ==============================================================================

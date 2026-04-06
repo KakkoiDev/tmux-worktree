@@ -193,6 +193,7 @@ get_worktree_data() {
     page=$(validate_page "${1:-1}")
     local filter
     filter=$(limit_filter "${2:-}")
+    local exclude="${3:-}"
     local sanitized_filter
     sanitized_filter=$(sanitize_filter "$filter")
     local regex_filter
@@ -202,6 +203,8 @@ get_worktree_data() {
 
     local project_name
     project_name=$(get_project_name)
+
+    local script_path="$SCRIPT_DIR/worktree_manager.sh"
 
     # Auto-prune stale worktrees before listing
     if [ "$(count_stale_worktrees)" -gt 0 ]; then
@@ -220,6 +223,8 @@ get_worktree_data() {
         -v items_per_page="$ITEMS_PER_PAGE" \
         -v start="$start_line" \
         -v end="$end_line" \
+        -v script_path="$script_path" \
+        -v exclude="$exclude" \
         -f "$SCRIPT_DIR/awk/worktree_data.awk"
 }
 
@@ -417,9 +422,48 @@ show_worktree_menu() {
     filter=$(limit_filter "${2:-}")
     local script_path="$SCRIPT_DIR/worktree_manager.sh"
 
+    # Build recent section (page 1 only, when enabled)
+    local recent_items=""
+    local exclude_list=""
+    if [ "$page" -eq 1 ] && [ "${RECENT_COUNT:-0}" -gt 0 ]; then
+        local project_name
+        project_name=$(get_project_name)
+        local recent_branches
+        recent_branches=$(get_recent_branches "$project_name" "$RECENT_COUNT")
+
+        if [ -n "$recent_branches" ]; then
+            # Filter recent branches to only those with active worktrees
+            local active_worktrees
+            active_worktrees=$(LC_ALL=C git worktree list --porcelain 2>/dev/null | awk '/^branch/ { sub("refs/heads/", "", $2); print $2 }')
+
+            local branch
+            local matched_branches=""
+            while IFS= read -r branch; do
+                [ -z "$branch" ] && continue
+                if echo "$active_worktrees" | grep -qx "$branch"; then
+                    # Get worktree path for this branch
+                    local wt_path
+                    wt_path=$(LC_ALL=C git worktree list --porcelain 2>/dev/null | awk -v b="$branch" '
+                        /^worktree/ { path = $2 }
+                        /^branch/ { sub("refs/heads/", "", $2); if ($2 == b) print path }
+                    ')
+                    if [ -n "$wt_path" ]; then
+                        recent_items="$recent_items\"$branch\" \"\" \"display-message \\\"Switching...\\\" ; run-shell \\\"'$script_path' switch_worktree $branch \\\\\\\"$wt_path\\\\\\\"\\\"\" "
+                        if [ -n "$matched_branches" ]; then
+                            matched_branches="$matched_branches|$branch"
+                        else
+                            matched_branches="$branch"
+                        fi
+                    fi
+                fi
+            done <<< "$recent_branches"
+            exclude_list="$matched_branches"
+        fi
+    fi
+
     # Single combined call for count + data (performance optimization)
     local combined_output
-    combined_output=$(get_worktree_data "$page" "$filter")
+    combined_output=$(get_worktree_data "$page" "$filter" "$exclude_list")
     local total_pages
     total_pages=$(echo "$combined_output" | head -1)
     local worktree_items
@@ -443,8 +487,15 @@ show_worktree_menu() {
         clear_option="\"Clear filter\" \"$KEY_CLEAR_FILTER\" \"run-shell \\\"'$script_path' show_worktree_menu 1\\\"\""
     fi
 
-    if [ -n "$worktree_items" ]; then
-        local all_options="$filter_option $clear_option $worktree_items $nav_options"
+    # Build recent section with header and separator
+    local recent_section=""
+    if [ -n "$recent_items" ]; then
+        # tmux display-menu separator: "" "" ""
+        recent_section="\"Recent\" \"\" \"\" $recent_items\"\" \"\" \"\" "
+    fi
+
+    if [ -n "$worktree_items" ] || [ -n "$recent_items" ]; then
+        local all_options="$filter_option $clear_option $recent_section$worktree_items $nav_options"
     else
         debug_log "show_worktree_menu: no worktrees found"
         local all_options="$filter_option $clear_option \"(No worktrees found)\" \"\" \"\" $nav_options"
@@ -552,6 +603,32 @@ _worktree_vars() {
     _WT_SESSION="${_WT_SESSION//./_}"
     _WT_SESSION="${_WT_SESSION//:/_}"
     _WT_PATH="$WORKTREE_BASE/$project_name/$branch"
+}
+
+# Switch to an existing worktree session (or create one) and record to recent log
+# Usage: switch_worktree "branch" "full_path"
+switch_worktree() {
+    local branch="$1"
+    local full_path="$2"
+    local project_name
+    project_name=$(get_project_name)
+    _worktree_vars "$branch" "$project_name"
+    local session_name="$_WT_SESSION"
+
+    # Record to recent log
+    record_recent_branch "$project_name" "$branch"
+
+    # Switch to existing session or create a new one
+    if tmux has-session -t "$session_name" 2>/dev/null; then
+        tmux switch-client -t "$session_name"
+    else
+        tmux new-session -d -c "$full_path" -s "$session_name" \
+            -e "TMUX_WORKTREE=1" \
+            -e "TMUX_WORKTREE_PROJECT=$project_name" \
+            -e "TMUX_WORKTREE_BRANCH=$branch" \
+            -e "TMUX_WORKTREE_PATH=$full_path" && \
+        tmux switch-client -t "$session_name"
+    fi
 }
 
 # Create worktree from existing branch
@@ -782,12 +859,13 @@ show_options_menu() {
     local script_path="$SCRIPT_DIR/worktree_manager.sh"
 
     # Compute next values for toggles and cycles
-    local next_copy_ignored next_debug next_items next_timeout next_fetch_prune
+    local next_copy_ignored next_debug next_items next_timeout next_fetch_prune next_recent
     next_copy_ignored=$(_cycle_value "$COPY_IGNORED" "off" "on")
     next_debug=$(_cycle_value "$DEBUG" "off" "on")
     next_items=$(_cycle_value "$ITEMS_PER_PAGE" "10" "15" "20" "25")
     next_timeout=$(_cycle_value "$FETCH_TIMEOUT" "15" "30" "60" "120")
     next_fetch_prune=$(_cycle_value "$FETCH_PRUNE" "off" "on")
+    next_recent=$(_cycle_value "$RECENT_COUNT" "0" "5" "10" "15")
 
     local dp
     dp=$(display_path "$WORKTREE_BASE")
@@ -810,6 +888,7 @@ show_options_menu() {
     options="$options\"Items/page: $ITEMS_PER_PAGE\" \"\" \"run-shell \\\"'$script_path' set_option @worktree-items-per-page $next_items\\\"\" "
     options="$options\"Fetch prune: $FETCH_PRUNE\" \"\" \"run-shell \\\"'$script_path' set_option @worktree-fetch-prune $next_fetch_prune\\\"\" "
     options="$options\"Fetch timeout: ${FETCH_TIMEOUT}s\" \"\" \"run-shell \\\"'$script_path' set_option @worktree-fetch-timeout $next_timeout\\\"\" "
+    options="$options\"Recent count: $RECENT_COUNT\" \"\" \"run-shell \\\"'$script_path' set_option @worktree-recent-count $next_recent\\\"\" "
     options="$options\"Hook: $hook_display\" \"\" \"command-prompt -I '$POST_CREATE_CMD' -p 'Post-create hook:' 'run-shell \\\"'\\'''$script_path' set_option @worktree-post-create-cmd %1'\\''\\\"'\" "
     options="$options\"Path: $dp\" \"\" \"command-prompt -I '$WORKTREE_BASE' -p 'Worktree path:' 'run-shell \\\"'\\'''$script_path' set_option @worktree-path %1'\\''\\\"'\" "
     options="$options\"← Back\" \"$KEY_BACK\" \"run-shell \\\"'$script_path' tmux_worktrees_main\\\"\""
@@ -887,6 +966,7 @@ main() {
         "show_remove_worktree_menu") show_remove_worktree_menu "$2" "$3" ;;
         "remove_worktree") remove_worktree "$2" "$3" "$4" "$5" "$6" ;;
         "add_worktree") add_worktree "$2" "$3" ;;
+        "switch_worktree") switch_worktree "$2" "$3" ;;
         "create_new_worktree") create_new_worktree "$2" ;;
         "fetch_remote_branches") fetch_remote_branches ;;
         "show_options_menu") show_options_menu ;;

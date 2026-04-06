@@ -178,6 +178,14 @@ _load_config_from_tmux() {
     COPY_IGNORED=$(get_tmux_option "@worktree-copy-ignored" "off")
     POST_CREATE_CMD=$(get_tmux_option "@worktree-post-create-cmd" "")
 
+    local recent_raw
+    recent_raw=$(get_tmux_option "@worktree-recent-count" "10")
+    RECENT_COUNT=$(validate_positive_int "$recent_raw" "10" "@worktree-recent-count")
+    # Also accept 0 (disabled) which validate_positive_int rejects
+    if [ "$recent_raw" = "0" ]; then
+        RECENT_COUNT=0
+    fi
+
     # Track which options were explicitly set (non-empty raw value)
     _EXPLICIT_OPTIONS=""
     local _raw_val
@@ -224,6 +232,7 @@ KEY_OPTIONS='$KEY_OPTIONS'
 FETCH_PRUNE='$FETCH_PRUNE'
 COPY_IGNORED='$COPY_IGNORED'
 POST_CREATE_CMD='$POST_CREATE_CMD'
+RECENT_COUNT='$RECENT_COUNT'
 CACHE
 }
 
@@ -370,7 +379,7 @@ load_config() {
     export WORKTREE_BASE ITEMS_PER_PAGE FETCH_TIMEOUT FETCH_PRUNE KEYBINDING DEBUG
     export KEY_LIST KEY_ADD KEY_REMOVE
     export KEY_NEXT KEY_PREV KEY_FILTER KEY_CLEAR_FILTER KEY_FETCH KEY_BACK KEY_QUIT KEY_NEW
-    export KEY_OPTIONS COPY_IGNORED POST_CREATE_CMD
+    export KEY_OPTIONS COPY_IGNORED POST_CREATE_CMD RECENT_COUNT
 
     # Load project config (overrides non-explicit options)
     _load_project_config
@@ -445,6 +454,77 @@ restore_saved_options() {
             tmux set-option -g "$key" "$value" 2>/dev/null || true
         fi
     done < "$state_file"
+}
+
+# ==============================================================================
+# RECENT BRANCH TRACKING
+# ==============================================================================
+
+# Max entries stored in recent log (matches highest RECENT_COUNT cycle value)
+_RECENT_LOG_MAX=15
+
+# Get recent log file path
+# Override with TMUX_WORKTREE_RECENT_FILE for testing
+_get_recent_file() {
+    echo "${TMUX_WORKTREE_RECENT_FILE:-$WORKTREE_BASE/.recent.log}"
+}
+
+# Record a branch switch to the recent log
+# Format: project:branch (one per line, newest at bottom)
+# Auto-trims to _RECENT_LOG_MAX entries
+# Usage: record_recent_branch "project" "branch"
+record_recent_branch() {
+    local project="$1"
+    local branch="$2"
+    [ -z "$project" ] || [ -z "$branch" ] && return 0
+
+    local recent_file
+    recent_file=$(_get_recent_file)
+    mkdir -p "$(dirname "$recent_file")" 2>/dev/null || true
+
+    # Append entry
+    echo "$project:$branch" >> "$recent_file"
+
+    # Auto-trim if exceeds max
+    local count
+    count=$(wc -l < "$recent_file" 2>/dev/null | tr -d ' ')
+    if [ "$count" -gt "$_RECENT_LOG_MAX" ]; then
+        tail -"$_RECENT_LOG_MAX" "$recent_file" > "$recent_file.tmp" && mv "$recent_file.tmp" "$recent_file"
+    fi
+}
+
+# Get recent unique branches for a project (newest first)
+# Returns one branch name per line, up to $count entries
+# Usage: get_recent_branches "project" "count"
+get_recent_branches() {
+    local project="$1"
+    local count="${2:-10}"
+    [ "$count" -eq 0 ] 2>/dev/null && return 0
+
+    local recent_file
+    recent_file=$(_get_recent_file)
+    [ -f "$recent_file" ] || return 0
+
+    # Reverse file (portable: awk works on both macOS and Linux)
+    # Filter by project, deduplicate, take first N
+    awk -F: -v proj="$project" -v max="$count" '
+    {
+        lines[NR] = $0
+    }
+    END {
+        n = 0
+        for (i = NR; i >= 1; i--) {
+            split(lines[i], parts, ":")
+            if (parts[1] != proj) continue
+            branch = parts[2]
+            if (branch == "") continue
+            if (seen[branch]) continue
+            seen[branch] = 1
+            print branch
+            n++
+            if (n >= max) exit
+        }
+    }' "$recent_file"
 }
 
 # ==============================================================================

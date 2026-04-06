@@ -1,11 +1,16 @@
 # worktree_data.awk - Generate menu items for worktree list
 # Input: git worktree list --porcelain
-# Variables: project, filter, items_per_page, start, end
+# Variables: project, filter, items_per_page, start, end, script_path, exclude
 # Output: Line 1 = total_pages, Line 2 = space-separated menu items
 
 BEGIN {
     count = 0
     line_num = 0
+    # Parse exclude list into array (pipe-separated branch names)
+    n = split(exclude, exc_arr, "|")
+    for (i = 1; i <= n; i++) {
+        excluded[exc_arr[i]] = 1
+    }
 }
 /^worktree/ { path = $2; full_path = $2; head_sha = "" }
 /^HEAD/ { head_sha = substr($2, 1, 7) }
@@ -16,15 +21,15 @@ BEGIN {
     gsub(/[\r\n]/, "", branch)
     gsub(/[^a-zA-Z0-9._\/-]/, "", branch)
 
+    # Skip excluded branches (already shown in recent section)
+    if (excluded[branch]) next
+
     # Apply filter (case-insensitive)
     if (filter == "" || tolower(branch) ~ tolower(filter)) {
         count++
         line_num++
         if (line_num >= start && line_num <= end) {
-            session_name = project "-" branch
-            gsub("/", "_", session_name)
-            gsub("[.:]", "_", session_name)
-            items[line_num] = "\"" branch "\" \"\" \"display-message \\\"Switching...\\\" ; run-shell \\\"tmux has-session -t " session_name " 2>/dev/null && tmux switch-client -t " session_name " || (tmux new-session -d -c \\\\\\\"" full_path "\\\\\\\" -s " session_name " -e TMUX_WORKTREE=1 -e TMUX_WORKTREE_PROJECT=" project " -e TMUX_WORKTREE_BRANCH=" branch " -e TMUX_WORKTREE_PATH=\\\\\\\"" full_path "\\\\\\\" && tmux switch-client -t " session_name ")\\\"\""
+            items[line_num] = "\"" branch "\" \"\" \"display-message \\\"Switching...\\\" ; run-shell \\\"'" script_path "' switch_worktree " branch " \\\\\\\"" full_path "\\\\\\\"\\\"\""
         }
     }
 }
@@ -37,9 +42,7 @@ BEGIN {
         count++
         line_num++
         if (line_num >= start && line_num <= end) {
-            session_name = project "-detached-" head_sha
-            gsub("[.:]", "_", session_name)
-            items[line_num] = "\"" branch "\" \"\" \"display-message \\\"Switching...\\\" ; run-shell \\\"tmux has-session -t " session_name " 2>/dev/null && tmux switch-client -t " session_name " || (tmux new-session -d -c \\\\\\\"" full_path "\\\\\\\" -s " session_name " -e TMUX_WORKTREE=1 -e TMUX_WORKTREE_PROJECT=" project " -e TMUX_WORKTREE_BRANCH=" branch " -e TMUX_WORKTREE_PATH=\\\\\\\"" full_path "\\\\\\\" && tmux switch-client -t " session_name ")\\\"\""
+            items[line_num] = "\"" branch "\" \"\" \"display-message \\\"Switching...\\\" ; run-shell \\\"'" script_path "' switch_worktree " branch " \\\\\\\"" full_path "\\\\\\\"\\\"\""
         }
     }
 }

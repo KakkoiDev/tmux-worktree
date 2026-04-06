@@ -202,7 +202,7 @@ teardown() {
     git worktree add -q "$wt_dir/feature-one" feature-one
 
     show_worktree_menu 1
-    assert_contains "$CAPTURED_MENU_OPTIONS" 'switch-client'
+    assert_contains "$CAPTURED_MENU_OPTIONS" 'switch_worktree'
 
     git worktree remove --force "$wt_dir/feature-one" 2>/dev/null || true
     rm -rf "$wt_dir"
