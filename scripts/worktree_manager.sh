@@ -465,7 +465,7 @@ show_worktree_menu() {
     # Recent sort toggle
     local recent_option=""
     if [ "$sort_recent" = "1" ]; then
-        recent_option="\"All\" \"r\" \"run-shell \\\"'$script_path' show_worktree_menu 1 '$filter' 0\\\"\" "
+        recent_option="\"Default\" \"r\" \"run-shell \\\"'$script_path' show_worktree_menu 1 '$filter' 0\\\"\" "
     else
         recent_option="\"Recent\" \"r\" \"run-shell \\\"'$script_path' show_worktree_menu 1 '$filter' 1\\\"\" "
     fi

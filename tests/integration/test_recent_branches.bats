@@ -226,9 +226,9 @@ teardown() {
     assert_contains "$CAPTURED_MENU_OPTIONS" '"Recent" "r"'
 }
 
-@test "list menu shows All toggle when sort_recent=1" {
+@test "list menu shows Default toggle when sort_recent=1" {
     show_worktree_menu 1 "" 1
-    assert_contains "$CAPTURED_MENU_OPTIONS" '"All" "r"'
+    assert_contains "$CAPTURED_MENU_OPTIONS" '"Default" "r"'
 }
 
 @test "list menu title shows [Recent] when sort_recent=1" {
@@ -246,7 +246,7 @@ teardown() {
     assert_contains "$CAPTURED_MENU_OPTIONS" "show_worktree_menu 1 '' 1"
 }
 
-@test "list menu All toggle dispatches with sort_recent=0" {
+@test "list menu Default toggle dispatches with sort_recent=0" {
     show_worktree_menu 1 "" 1
     assert_contains "$CAPTURED_MENU_OPTIONS" "show_worktree_menu 1 '' 0"
 }
