@@ -1,16 +1,11 @@
 # worktree_data.awk - Generate menu items for worktree list
 # Input: git worktree list --porcelain
-# Variables: project, filter, items_per_page, start, end, script_path, exclude
+# Variables: project, filter, items_per_page, start, end, script_path
 # Output: Line 1 = total_pages, Line 2 = space-separated menu items
 
 BEGIN {
     count = 0
     line_num = 0
-    # Parse exclude list into array (pipe-separated branch names)
-    n = split(exclude, exc_arr, "|")
-    for (i = 1; i <= n; i++) {
-        excluded[exc_arr[i]] = 1
-    }
 }
 /^worktree/ { path = $2; full_path = $2; head_sha = "" }
 /^HEAD/ { head_sha = substr($2, 1, 7) }
@@ -20,9 +15,6 @@ BEGIN {
     # Sanitize branch name - remove newlines and shell metacharacters
     gsub(/[\r\n]/, "", branch)
     gsub(/[^a-zA-Z0-9._\/-]/, "", branch)
-
-    # Skip excluded branches (already shown in recent section)
-    if (excluded[branch]) next
 
     # Apply filter (case-insensitive)
     if (filter == "" || tolower(branch) ~ tolower(filter)) {

@@ -182,6 +182,11 @@ remove_worktree() {
         debug_log "remove_worktree: session killed: $branch_name"
     fi
 
+    # Remove from recent log
+    local project_name
+    project_name=$(get_project_name)
+    remove_recent_branch "$project_name" "$branch_name"
+
     # Refresh the menu
     show_remove_worktree_menu "$current_page"
 }
@@ -193,7 +198,6 @@ get_worktree_data() {
     page=$(validate_page "${1:-1}")
     local filter
     filter=$(limit_filter "${2:-}")
-    local exclude="${3:-}"
     local sanitized_filter
     sanitized_filter=$(sanitize_filter "$filter")
     local regex_filter
@@ -224,7 +228,6 @@ get_worktree_data() {
         -v start="$start_line" \
         -v end="$end_line" \
         -v script_path="$script_path" \
-        -v exclude="$exclude" \
         -f "$SCRIPT_DIR/awk/worktree_data.awk"
 }
 
@@ -415,102 +418,142 @@ display_menu() {
 # Show worktree list menu with pagination and optional filter
 show_worktree_menu() {
     require_git_repo || return 1
-    debug_log "show_worktree_menu called: page=${1:-1} filter='${2:-}' show_recent=${3:-0}"
+    debug_log "show_worktree_menu called: page=${1:-1} filter='${2:-}'"
     local page
     page=$(validate_page "${1:-1}")
     local filter
     filter=$(limit_filter "${2:-}")
-    local show_recent=${3:-0}
     local script_path="$SCRIPT_DIR/worktree_manager.sh"
-
-    # Build recent section (page 1 only, when toggled on and enabled)
-    local recent_items=""
-    local exclude_list=""
-    if [ "$show_recent" = "1" ] && [ "$page" -eq 1 ] && [ "${RECENT_COUNT:-0}" -gt 0 ]; then
-        local project_name
-        project_name=$(get_project_name)
-        local recent_branches
-        recent_branches=$(get_recent_branches "$project_name" "$RECENT_COUNT")
-
-        if [ -n "$recent_branches" ]; then
-            # Filter recent branches to only those with active worktrees
-            local active_worktrees
-            active_worktrees=$(LC_ALL=C git worktree list --porcelain 2>/dev/null | awk '/^branch/ { sub("refs/heads/", "", $2); print $2 }')
-
-            local branch
-            local matched_branches=""
-            while IFS= read -r branch; do
-                [ -z "$branch" ] && continue
-                if echo "$active_worktrees" | grep -qx "$branch"; then
-                    # Get worktree path for this branch
-                    local wt_path
-                    wt_path=$(LC_ALL=C git worktree list --porcelain 2>/dev/null | awk -v b="$branch" '
-                        /^worktree/ { path = $2 }
-                        /^branch/ { sub("refs/heads/", "", $2); if ($2 == b) print path }
-                    ')
-                    if [ -n "$wt_path" ]; then
-                        recent_items="$recent_items\"$branch\" \"\" \"display-message \\\"Switching...\\\" ; run-shell \\\"'$script_path' switch_worktree $branch \\\\\\\"$wt_path\\\\\\\"\\\"\" "
-                        if [ -n "$matched_branches" ]; then
-                            matched_branches="$matched_branches|$branch"
-                        else
-                            matched_branches="$branch"
-                        fi
-                    fi
-                fi
-            done <<< "$recent_branches"
-            exclude_list="$matched_branches"
-        fi
-    fi
 
     # Single combined call for count + data (performance optimization)
     local combined_output
-    combined_output=$(get_worktree_data "$page" "$filter" "$exclude_list")
+    combined_output=$(get_worktree_data "$page" "$filter")
     local total_pages
     total_pages=$(echo "$combined_output" | head -1)
     local worktree_items
     worktree_items=$(echo "$combined_output" | tail -n +2)
 
     local nav_options
-    nav_options=$(generate_nav_options "$page" "$total_pages" "show_worktree_menu" "$filter" "$show_recent")
+    nav_options=$(generate_nav_options "$page" "$total_pages" "show_worktree_menu" "$filter")
 
-    debug_log "show_worktree_menu: total_pages=$total_pages show_recent=$show_recent items_count=$(echo "$worktree_items" | grep -c '\"' || echo 0)"
+    debug_log "show_worktree_menu: total_pages=$total_pages items_count=$(echo "$worktree_items" | grep -c '\"' || echo 0)"
 
-    # Build title with state indicators
+    # Build title with filter indicator
     local title="Worktrees (Page $page/$total_pages)"
-    [ -n "$recent_items" ] && title="$title [Recent]"
     [ -n "$filter" ] && title="$title - Filter: '$filter'"
 
-    # Recent toggle option (only when RECENT_COUNT > 0)
-    local recent_option=""
-    if [ "${RECENT_COUNT:-0}" -gt 0 ]; then
-        if [ "$show_recent" = "1" ]; then
-            recent_option="\"Hide recent\" \"r\" \"run-shell \\\"'$script_path' show_worktree_menu $page '$filter' 0\\\"\" "
-        else
-            recent_option="\"Recent\" \"r\" \"run-shell \\\"'$script_path' show_worktree_menu 1 '$filter' 1\\\"\" "
-        fi
-    fi
+    # Recent menu option
+    local recent_option="\"Recent\" \"r\" \"display-message \\\"Loading...\\\" ; run-shell \\\"'$script_path' show_recent_menu\\\"\" "
 
     # Filter option (always present)
-    local filter_option="\"Filter\" \"$KEY_FILTER\" \"command-prompt -T search -p 'Filter pattern:' 'run-shell \\\"'$script_path' show_worktree_menu 1 '\\''%1'\\'' $show_recent\\\"'\""
+    local filter_option="\"Filter\" \"$KEY_FILTER\" \"command-prompt -T search -p 'Filter pattern:' 'run-shell \\\"'$script_path' show_worktree_menu 1 '\\''%1'\\''\\\"'\""
 
     # Clear filter option (only when filter active)
     local clear_option=""
     if [ -n "$filter" ]; then
-        clear_option="\"Clear filter\" \"$KEY_CLEAR_FILTER\" \"run-shell \\\"'$script_path' show_worktree_menu 1 '' $show_recent\\\"\""
+        clear_option="\"Clear filter\" \"$KEY_CLEAR_FILTER\" \"run-shell \\\"'$script_path' show_worktree_menu 1\\\"\""
     fi
 
-    # Build recent section with separators (no header row - not possible to make non-selectable)
-    local recent_section=""
-    if [ -n "$recent_items" ]; then
-        # tmux display-menu separator: "" "" ""
-        recent_section="$recent_items\"\" \"\" \"\" "
-    fi
-
-    if [ -n "$worktree_items" ] || [ -n "$recent_items" ]; then
-        local all_options="$recent_option$filter_option $clear_option $recent_section$worktree_items $nav_options"
+    if [ -n "$worktree_items" ]; then
+        local all_options="$recent_option$filter_option $clear_option $worktree_items $nav_options"
     else
         debug_log "show_worktree_menu: no worktrees found"
         local all_options="$recent_option$filter_option $clear_option \"(No worktrees found)\" \"\" \"\" $nav_options"
+    fi
+
+    display_menu "$title" "$all_options"
+}
+
+# Show recently accessed worktrees menu with pagination and optional filter
+show_recent_menu() {
+    require_git_repo || return 1
+    debug_log "show_recent_menu called: page=${1:-1} filter='${2:-}'"
+    local page
+    page=$(validate_page "${1:-1}")
+    local filter
+    filter=$(limit_filter "${2:-}")
+    local script_path="$SCRIPT_DIR/worktree_manager.sh"
+
+    local project_name
+    project_name=$(get_project_name)
+
+    # Get all recent branches and validate they still have active worktrees
+    local recent_branches
+    recent_branches=$(get_recent_branches "$project_name")
+
+    # Build worktree lookup (branch -> path) from porcelain output
+    local porcelain
+    porcelain=$(LC_ALL=C git worktree list --porcelain 2>/dev/null)
+
+    local sanitized_filter regex_filter
+    sanitized_filter=$(sanitize_filter "$filter")
+    regex_filter=$(convert_glob_to_regex "$sanitized_filter")
+
+    # Collect valid recent items (branch + path pairs)
+    local valid_branches=""
+    local valid_paths=""
+    local total=0
+    local branch wt_path
+    while IFS= read -r branch; do
+        [ -z "$branch" ] && continue
+
+        # Check worktree still exists
+        wt_path=$(echo "$porcelain" | awk -v b="$branch" '
+            /^worktree/ { path = $2 }
+            /^branch/ { sub("refs/heads/", "", $2); if ($2 == b) print path }
+        ')
+        [ -z "$wt_path" ] && continue
+        [ ! -d "$wt_path" ] && continue
+
+        # Apply filter
+        if [ -n "$regex_filter" ]; then
+            echo "$branch" | grep -qi "$sanitized_filter" || continue
+        fi
+
+        total=$((total + 1))
+        valid_branches="${valid_branches}${branch}"$'\n'
+        valid_paths="${valid_paths}${wt_path}"$'\n'
+    done <<< "$recent_branches"
+
+    # Pagination
+    local total_pages=$(( (total + ITEMS_PER_PAGE - 1) / ITEMS_PER_PAGE ))
+    [ "$total_pages" -lt 1 ] && total_pages=1
+    local start_line=$(( (page - 1) * ITEMS_PER_PAGE + 1 ))
+    local end_line=$(( page * ITEMS_PER_PAGE ))
+
+    # Build menu items for current page
+    local recent_items=""
+    local i=0
+    while IFS= read -r branch; do
+        [ -z "$branch" ] && continue
+        i=$((i + 1))
+        [ "$i" -lt "$start_line" ] && continue
+        [ "$i" -gt "$end_line" ] && break
+
+        wt_path=$(echo "$valid_paths" | sed -n "${i}p")
+        recent_items="$recent_items\"$branch\" \"\" \"display-message \\\"Switching...\\\" ; run-shell \\\"'$script_path' switch_worktree $branch \\\\\\\"$wt_path\\\\\\\"\\\"\" "
+    done <<< "$valid_branches"
+
+    local nav_options
+    nav_options=$(generate_nav_options "$page" "$total_pages" "show_recent_menu" "$filter")
+
+    # Build title
+    local title="Recent (Page $page/$total_pages)"
+    [ -n "$filter" ] && title="$title - Filter: '$filter'"
+
+    # Filter option
+    local filter_option="\"Filter\" \"$KEY_FILTER\" \"command-prompt -T search -p 'Filter pattern:' 'run-shell \\\"'$script_path' show_recent_menu 1 '\\''%1'\\''\\\"'\""
+
+    # Clear filter option
+    local clear_option=""
+    if [ -n "$filter" ]; then
+        clear_option="\"Clear filter\" \"$KEY_CLEAR_FILTER\" \"run-shell \\\"'$script_path' show_recent_menu 1\\\"\""
+    fi
+
+    if [ -n "$recent_items" ]; then
+        local all_options="$filter_option $clear_option $recent_items $nav_options"
+    else
+        local all_options="$filter_option $clear_option \"(No recent worktrees)\" \"\" \"\" $nav_options"
     fi
 
     display_menu "$title" "$all_options"
@@ -874,13 +917,12 @@ show_options_menu() {
     local script_path="$SCRIPT_DIR/worktree_manager.sh"
 
     # Compute next values for toggles and cycles
-    local next_copy_ignored next_debug next_items next_timeout next_fetch_prune next_recent
+    local next_copy_ignored next_debug next_items next_timeout next_fetch_prune
     next_copy_ignored=$(_cycle_value "$COPY_IGNORED" "off" "on")
     next_debug=$(_cycle_value "$DEBUG" "off" "on")
     next_items=$(_cycle_value "$ITEMS_PER_PAGE" "10" "15" "20" "25")
     next_timeout=$(_cycle_value "$FETCH_TIMEOUT" "15" "30" "60" "120")
     next_fetch_prune=$(_cycle_value "$FETCH_PRUNE" "off" "on")
-    next_recent=$(_cycle_value "$RECENT_COUNT" "0" "5" "10" "15")
 
     local dp
     dp=$(display_path "$WORKTREE_BASE")
@@ -903,7 +945,6 @@ show_options_menu() {
     options="$options\"Items/page: $ITEMS_PER_PAGE\" \"\" \"run-shell \\\"'$script_path' set_option @worktree-items-per-page $next_items\\\"\" "
     options="$options\"Fetch prune: $FETCH_PRUNE\" \"\" \"run-shell \\\"'$script_path' set_option @worktree-fetch-prune $next_fetch_prune\\\"\" "
     options="$options\"Fetch timeout: ${FETCH_TIMEOUT}s\" \"\" \"run-shell \\\"'$script_path' set_option @worktree-fetch-timeout $next_timeout\\\"\" "
-    options="$options\"Recent count: $RECENT_COUNT\" \"\" \"run-shell \\\"'$script_path' set_option @worktree-recent-count $next_recent\\\"\" "
     options="$options\"Hook: $hook_display\" \"\" \"command-prompt -I '$POST_CREATE_CMD' -p 'Post-create hook:' 'run-shell \\\"'\\'''$script_path' set_option @worktree-post-create-cmd %1'\\''\\\"'\" "
     options="$options\"Path: $dp\" \"\" \"command-prompt -I '$WORKTREE_BASE' -p 'Worktree path:' 'run-shell \\\"'\\'''$script_path' set_option @worktree-path %1'\\''\\\"'\" "
     options="$options\"← Back\" \"$KEY_BACK\" \"run-shell \\\"'$script_path' tmux_worktrees_main\\\"\""
@@ -976,7 +1017,8 @@ main() {
 
     case "${1:-tmux_worktrees_main}" in
         "tmux_worktrees_main"|"") tmux_worktrees_main ;;
-        "show_worktree_menu") show_worktree_menu "$2" "$3" "$4" ;;
+        "show_worktree_menu") show_worktree_menu "$2" "$3" ;;
+        "show_recent_menu") show_recent_menu "$2" "$3" ;;
         "show_add_worktree_menu") show_add_worktree_menu "$2" "$3" "$4" ;;
         "show_remove_worktree_menu") show_remove_worktree_menu "$2" "$3" ;;
         "remove_worktree") remove_worktree "$2" "$3" "$4" "$5" "$6" ;;
