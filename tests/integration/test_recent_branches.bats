@@ -40,13 +40,15 @@ setup() {
     RECENT_COUNT=10
     tmux_set_option "@worktree-recent-count" "10"
 
-    # Mock display_menu to capture options
+    # Mock display_menu to capture title and options
     display_menu() {
+        CAPTURED_MENU_TITLE="$1"
         CAPTURED_MENU_OPTIONS="$2"
     }
 }
 
 teardown() {
+    CAPTURED_MENU_TITLE=""
     CAPTURED_MENU_OPTIONS=""
     rm -f "$TMUX_WORKTREE_RECENT_FILE" 2>/dev/null
     safe_cleanup_worktree_base
@@ -268,27 +270,31 @@ teardown() {
 }
 
 # ==============================================================================
-# LIST MENU RECENT SECTION TESTS
+# LIST MENU RECENT TOGGLE TESTS
 # ==============================================================================
 
-@test "list menu shows Recent header when recent branches exist" {
-    local wt_dir="${BATS_TMPDIR}/worktrees-$$"
-    mkdir -p "$wt_dir"
-    git worktree add -q "$wt_dir/feature-one" feature-one
+@test "list menu shows Recent action item when RECENT_COUNT > 0" {
+    show_worktree_menu 1
+    assert_contains "$CAPTURED_MENU_OPTIONS" '"Recent" "r"'
+}
 
-    # Record this branch as recent
-    local project_name
-    project_name=$(get_project_name)
-    record_recent_branch "$project_name" "feature-one"
+@test "list menu hides Recent action item when RECENT_COUNT = 0" {
+    RECENT_COUNT=0
+    tmux_set_option "@worktree-recent-count" "0"
 
     show_worktree_menu 1
-    assert_contains "$CAPTURED_MENU_OPTIONS" '"Recent"'
+    refute_contains "$CAPTURED_MENU_OPTIONS" '"Recent" "r"'
 
     git worktree remove --force "$wt_dir/feature-one" 2>/dev/null || true
     rm -rf "$wt_dir"
 }
 
-@test "list menu shows recent branch in recent section" {
+@test "list menu shows Hide recent when recent is toggled on" {
+    show_worktree_menu 1 "" 1
+    assert_contains "$CAPTURED_MENU_OPTIONS" '"Hide recent" "r"'
+}
+
+@test "list menu shows recent section only when toggled on" {
     local wt_dir="${BATS_TMPDIR}/worktrees-$$"
     mkdir -p "$wt_dir"
     git worktree add -q "$wt_dir/feature-one" feature-one
@@ -297,14 +303,35 @@ teardown() {
     project_name=$(get_project_name)
     record_recent_branch "$project_name" "feature-one"
 
+    # Default: no [Recent] in title
     show_worktree_menu 1
-    assert_contains "$CAPTURED_MENU_OPTIONS" 'feature-one'
+    refute_contains "$CAPTURED_MENU_TITLE" "[Recent]"
+
+    # Toggled on: [Recent] appears in title
+    show_worktree_menu 1 "" 1
+    assert_contains "$CAPTURED_MENU_TITLE" "[Recent]"
 
     git worktree remove --force "$wt_dir/feature-one" 2>/dev/null || true
     rm -rf "$wt_dir"
 }
 
-@test "list menu does not show Recent header when disabled" {
+@test "list menu recent section shows branch when toggled on" {
+    local wt_dir="${BATS_TMPDIR}/worktrees-$$"
+    mkdir -p "$wt_dir"
+    git worktree add -q "$wt_dir/feature-one" feature-one
+
+    local project_name
+    project_name=$(get_project_name)
+    record_recent_branch "$project_name" "feature-one"
+
+    show_worktree_menu 1 "" 1
+    assert_contains "$CAPTURED_MENU_OPTIONS" 'switch_worktree feature-one'
+
+    git worktree remove --force "$wt_dir/feature-one" 2>/dev/null || true
+    rm -rf "$wt_dir"
+}
+
+@test "list menu does not show recent section when disabled even if toggled" {
     RECENT_COUNT=0
     tmux_set_option "@worktree-recent-count" "0"
 
@@ -316,41 +343,25 @@ teardown() {
     project_name=$(get_project_name)
     record_recent_branch "$project_name" "feature-one"
 
-    show_worktree_menu 1
-    refute_contains "$CAPTURED_MENU_OPTIONS" '"Recent"'
+    show_worktree_menu 1 "" 1
+    refute_contains "$CAPTURED_MENU_TITLE" "[Recent]"
 
     git worktree remove --force "$wt_dir/feature-one" 2>/dev/null || true
     rm -rf "$wt_dir"
 }
 
-@test "list menu does not show Recent header with no recent history" {
-    local wt_dir="${BATS_TMPDIR}/worktrees-$$"
-    mkdir -p "$wt_dir"
-    git worktree add -q "$wt_dir/feature-one" feature-one
-
-    # No record_recent_branch call
-    show_worktree_menu 1
-    refute_contains "$CAPTURED_MENU_OPTIONS" '"Recent"'
-
-    git worktree remove --force "$wt_dir/feature-one" 2>/dev/null || true
-    rm -rf "$wt_dir"
-}
-
-@test "list menu only shows recent for active worktrees" {
+@test "list menu recent only shows active worktrees" {
     local wt_dir="${BATS_TMPDIR}/worktrees-$$"
     mkdir -p "$wt_dir"
     git worktree add -q "$wt_dir/feature-one" feature-one
 
     local project_name
     project_name=$(get_project_name)
-    # Record both an active and a non-active branch
     record_recent_branch "$project_name" "feature-two"
     record_recent_branch "$project_name" "feature-one"
 
-    show_worktree_menu 1
-
-    # Recent header should appear (feature-one is active)
-    assert_contains "$CAPTURED_MENU_OPTIONS" '"Recent"'
+    show_worktree_menu 1 "" 1
+    assert_contains "$CAPTURED_MENU_TITLE" "[Recent]"
 
     git worktree remove --force "$wt_dir/feature-one" 2>/dev/null || true
     rm -rf "$wt_dir"
@@ -366,12 +377,10 @@ teardown() {
     project_name=$(get_project_name)
     record_recent_branch "$project_name" "feature-one"
 
-    show_worktree_menu 1
+    show_worktree_menu 1 "" 1
 
-    # Count occurrences of feature-one in switch_worktree commands
     local switch_count
     switch_count=$(echo "$CAPTURED_MENU_OPTIONS" | grep -o "switch_worktree feature-one" | wc -l | tr -d ' ')
-    # Should appear exactly once (in recent section, not duplicated in main list)
     assert_equal "1" "$switch_count"
 
     git worktree remove --force "$wt_dir/feature-one" 2>/dev/null || true
@@ -388,12 +397,24 @@ teardown() {
     project_name=$(get_project_name)
     record_recent_branch "$project_name" "feature-one"
 
-    # Page 2 should not have Recent header
-    show_worktree_menu 2
-    refute_contains "$CAPTURED_MENU_OPTIONS" '"Recent"'
+    show_worktree_menu 2 "" 1
+    refute_contains "$CAPTURED_MENU_TITLE" "[Recent]"
 
     git worktree remove --force "$wt_dir/feature-one" 2>/dev/null || true
     rm -rf "$wt_dir"
+}
+
+@test "list menu filter preserves show_recent state" {
+    show_worktree_menu 1 "" 1
+    # The filter option should pass show_recent=1 through
+    assert_contains "$CAPTURED_MENU_OPTIONS" "show_worktree_menu 1"
+    assert_contains "$CAPTURED_MENU_OPTIONS" "1\\\"'\""
+}
+
+@test "list menu recent toggle dispatches correct command" {
+    show_worktree_menu 1
+    # The Recent action should dispatch show_worktree_menu with show_recent=1
+    assert_contains "$CAPTURED_MENU_OPTIONS" "show_worktree_menu 1 '' 1"
 }
 
 # ==============================================================================

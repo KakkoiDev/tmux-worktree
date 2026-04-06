@@ -415,17 +415,18 @@ display_menu() {
 # Show worktree list menu with pagination and optional filter
 show_worktree_menu() {
     require_git_repo || return 1
-    debug_log "show_worktree_menu called: page=${1:-1} filter='${2:-}'"
+    debug_log "show_worktree_menu called: page=${1:-1} filter='${2:-}' show_recent=${3:-0}"
     local page
     page=$(validate_page "${1:-1}")
     local filter
     filter=$(limit_filter "${2:-}")
+    local show_recent=${3:-0}
     local script_path="$SCRIPT_DIR/worktree_manager.sh"
 
-    # Build recent section (page 1 only, when enabled)
+    # Build recent section (page 1 only, when toggled on and enabled)
     local recent_items=""
     local exclude_list=""
-    if [ "$page" -eq 1 ] && [ "${RECENT_COUNT:-0}" -gt 0 ]; then
+    if [ "$show_recent" = "1" ] && [ "$page" -eq 1 ] && [ "${RECENT_COUNT:-0}" -gt 0 ]; then
         local project_name
         project_name=$(get_project_name)
         local recent_branches
@@ -470,35 +471,46 @@ show_worktree_menu() {
     worktree_items=$(echo "$combined_output" | tail -n +2)
 
     local nav_options
-    nav_options=$(generate_nav_options "$page" "$total_pages" "show_worktree_menu" "$filter")
+    nav_options=$(generate_nav_options "$page" "$total_pages" "show_worktree_menu" "$filter" "$show_recent")
 
-    debug_log "show_worktree_menu: total_pages=$total_pages items_count=$(echo "$worktree_items" | grep -c '\"' || echo 0)"
+    debug_log "show_worktree_menu: total_pages=$total_pages show_recent=$show_recent items_count=$(echo "$worktree_items" | grep -c '\"' || echo 0)"
 
-    # Build title with filter indicator
+    # Build title with state indicators
     local title="Worktrees (Page $page/$total_pages)"
+    [ -n "$recent_items" ] && title="$title [Recent]"
     [ -n "$filter" ] && title="$title - Filter: '$filter'"
 
+    # Recent toggle option (only when RECENT_COUNT > 0)
+    local recent_option=""
+    if [ "${RECENT_COUNT:-0}" -gt 0 ]; then
+        if [ "$show_recent" = "1" ]; then
+            recent_option="\"Hide recent\" \"r\" \"run-shell \\\"'$script_path' show_worktree_menu $page '$filter' 0\\\"\" "
+        else
+            recent_option="\"Recent\" \"r\" \"run-shell \\\"'$script_path' show_worktree_menu 1 '$filter' 1\\\"\" "
+        fi
+    fi
+
     # Filter option (always present)
-    local filter_option="\"Filter\" \"$KEY_FILTER\" \"command-prompt -T search -p 'Filter pattern:' 'run-shell \\\"'$script_path' show_worktree_menu 1 '\\''%1'\\''\\\"'\""
+    local filter_option="\"Filter\" \"$KEY_FILTER\" \"command-prompt -T search -p 'Filter pattern:' 'run-shell \\\"'$script_path' show_worktree_menu 1 '\\''%1'\\'' $show_recent\\\"'\""
 
     # Clear filter option (only when filter active)
     local clear_option=""
     if [ -n "$filter" ]; then
-        clear_option="\"Clear filter\" \"$KEY_CLEAR_FILTER\" \"run-shell \\\"'$script_path' show_worktree_menu 1\\\"\""
+        clear_option="\"Clear filter\" \"$KEY_CLEAR_FILTER\" \"run-shell \\\"'$script_path' show_worktree_menu 1 '' $show_recent\\\"\""
     fi
 
-    # Build recent section with header and separator
+    # Build recent section with separators (no header row - not possible to make non-selectable)
     local recent_section=""
     if [ -n "$recent_items" ]; then
         # tmux display-menu separator: "" "" ""
-        recent_section="\"Recent\" \"\" \"\" $recent_items\"\" \"\" \"\" "
+        recent_section="$recent_items\"\" \"\" \"\" "
     fi
 
     if [ -n "$worktree_items" ] || [ -n "$recent_items" ]; then
-        local all_options="$filter_option $clear_option $recent_section$worktree_items $nav_options"
+        local all_options="$recent_option$filter_option $clear_option $recent_section$worktree_items $nav_options"
     else
         debug_log "show_worktree_menu: no worktrees found"
-        local all_options="$filter_option $clear_option \"(No worktrees found)\" \"\" \"\" $nav_options"
+        local all_options="$recent_option$filter_option $clear_option \"(No worktrees found)\" \"\" \"\" $nav_options"
     fi
 
     display_menu "$title" "$all_options"
@@ -964,7 +976,7 @@ main() {
 
     case "${1:-tmux_worktrees_main}" in
         "tmux_worktrees_main"|"") tmux_worktrees_main ;;
-        "show_worktree_menu") show_worktree_menu "$2" "$3" ;;
+        "show_worktree_menu") show_worktree_menu "$2" "$3" "$4" ;;
         "show_add_worktree_menu") show_add_worktree_menu "$2" "$3" "$4" ;;
         "show_remove_worktree_menu") show_remove_worktree_menu "$2" "$3" ;;
         "remove_worktree") remove_worktree "$2" "$3" "$4" "$5" "$6" ;;
