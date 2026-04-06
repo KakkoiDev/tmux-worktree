@@ -574,6 +574,9 @@ _setup_worktree() {
     local session_name="$3"
     local project_name="$4"
 
+    # Record to recent log
+    record_recent_branch "$project_name" "$branch"
+
     # Copy ignored files if enabled
     if [ "$COPY_IGNORED" = "on" ]; then
         copy_ignored_files "$worktree_path"

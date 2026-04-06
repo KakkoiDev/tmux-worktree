@@ -454,6 +454,61 @@ teardown() {
     rm -rf "$wt_dir"
 }
 
+@test "add_worktree records branch to recent log" {
+    # Mock tmux to avoid actual session operations
+    tmux() {
+        case "$1" in
+            new-session) return 0 ;;
+            switch-client) return 0 ;;
+            display-message) return 0 ;;
+            *) command tmux -L "$TMUX_SOCKET" "$@" ;;
+        esac
+    }
+    export -f tmux
+
+    add_worktree "feature-one"
+
+    [ -f "$TMUX_WORKTREE_RECENT_FILE" ]
+    run cat "$TMUX_WORKTREE_RECENT_FILE"
+    assert_contains "$output" "feature-one"
+
+    unset -f tmux
+
+    # Cleanup worktree
+    local project_name
+    project_name=$(get_project_name)
+    local wt_path="$WORKTREE_BASE/$project_name/feature-one"
+    git worktree remove --force "$wt_path" 2>/dev/null || true
+}
+
+@test "create_new_worktree records branch to recent log" {
+    # Mock tmux to avoid actual session operations
+    tmux() {
+        case "$1" in
+            new-session) return 0 ;;
+            switch-client) return 0 ;;
+            display-message) return 0 ;;
+            *) command tmux -L "$TMUX_SOCKET" "$@" ;;
+        esac
+    }
+    export -f tmux
+
+    create_new_worktree "test-new-branch"
+
+    [ -f "$TMUX_WORKTREE_RECENT_FILE" ]
+    run cat "$TMUX_WORKTREE_RECENT_FILE"
+    assert_contains "$output" "test-new-branch"
+
+    unset -f tmux
+
+    # Cleanup worktree and branch
+    local project_name
+    project_name=$(get_project_name)
+    local wt_path="$WORKTREE_BASE/$project_name/test-new-branch"
+    git worktree remove --force "$wt_path" 2>/dev/null || true
+    git branch -D "test-new-branch" 2>/dev/null || true
+}
+
 # ==============================================================================
 # _RECENT_LOG_MAX BOUNDARY TESTS
 # ==============================================================================
