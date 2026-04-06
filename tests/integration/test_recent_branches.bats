@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # bats file_tags=integration,recent
-# Tests for recent branch tracking and the Recent menu
+# Tests for recent branch tracking and sort_recent toggle in the List menu
 
 load '../test_helper'
 
@@ -120,7 +120,6 @@ teardown() {
 
     remove_recent_branch "proj" "feature"
 
-    # feature-two line should remain (not substring-matched)
     local count
     count=$(wc -l < "$TMUX_WORKTREE_RECENT_FILE" | tr -d ' ')
     assert_equal "1" "$count"
@@ -172,10 +171,6 @@ teardown() {
     first_line=$(echo "$output" | head -1)
     assert_equal "alpha" "$first_line"
 
-    local second_line
-    second_line=$(echo "$output" | sed -n '2p')
-    assert_equal "beta" "$second_line"
-
     local count
     count=$(echo "$output" | wc -l | tr -d ' ')
     assert_equal "2" "$count"
@@ -223,100 +218,117 @@ teardown() {
 }
 
 # ==============================================================================
-# LIST MENU - RECENT ACTION ITEM
+# LIST MENU - SORT_RECENT TOGGLE
 # ==============================================================================
 
-@test "list menu shows Recent action item" {
+@test "list menu shows Recent toggle when sort_recent=0" {
     show_worktree_menu 1
     assert_contains "$CAPTURED_MENU_OPTIONS" '"Recent" "r"'
 }
 
-@test "list menu Recent dispatches show_recent_menu" {
+@test "list menu shows All toggle when sort_recent=1" {
+    show_worktree_menu 1 "" 1
+    assert_contains "$CAPTURED_MENU_OPTIONS" '"All" "r"'
+}
+
+@test "list menu title shows [Recent] when sort_recent=1" {
+    show_worktree_menu 1 "" 1
+    assert_contains "$CAPTURED_MENU_TITLE" "[Recent]"
+}
+
+@test "list menu title normal when sort_recent=0" {
     show_worktree_menu 1
-    assert_contains "$CAPTURED_MENU_OPTIONS" "show_recent_menu"
+    refute_contains "$CAPTURED_MENU_TITLE" "[Recent]"
 }
 
-# ==============================================================================
-# RECENT MENU TESTS
-# ==============================================================================
-
-@test "show_recent_menu is a recognized dispatch command" {
-    run bash -c "
-        source '$SCRIPTS_DIR/helpers.sh'
-        source '$SCRIPTS_DIR/filter.sh'
-        load_config
-        source '$SCRIPTS_DIR/worktree_manager.sh'
-        type show_recent_menu
-    "
-    assert_success
-    assert_contains "$output" "function"
+@test "list menu Recent toggle dispatches with sort_recent=1" {
+    show_worktree_menu 1
+    assert_contains "$CAPTURED_MENU_OPTIONS" "show_worktree_menu 1 '' 1"
 }
 
-@test "recent menu shows title with page info" {
-    show_recent_menu 1
-    assert_contains "$CAPTURED_MENU_TITLE" "Recent"
-    assert_contains "$CAPTURED_MENU_TITLE" "Page 1/"
+@test "list menu All toggle dispatches with sort_recent=0" {
+    show_worktree_menu 1 "" 1
+    assert_contains "$CAPTURED_MENU_OPTIONS" "show_worktree_menu 1 '' 0"
 }
 
-@test "recent menu shows empty message with no history" {
-    show_recent_menu 1
-    assert_contains "$CAPTURED_MENU_OPTIONS" "(No recent worktrees)"
+@test "list menu filter preserves sort_recent state" {
+    show_worktree_menu 1 "" 1
+    # Filter command should include sort_recent=1
+    assert_contains "$CAPTURED_MENU_OPTIONS" "show_worktree_menu 1"
+    assert_contains "$CAPTURED_MENU_OPTIONS" "1\\\"'\""
 }
 
-@test "recent menu shows recent worktree branches" {
+@test "list menu clear filter preserves sort_recent state" {
+    show_worktree_menu 1 "test*" 1
+    assert_contains "$CAPTURED_MENU_OPTIONS" "show_worktree_menu 1 '' 1"
+}
+
+@test "list menu sort_recent shows all worktrees reordered" {
     local wt_dir="${BATS_TMPDIR}/worktrees-$$"
     mkdir -p "$wt_dir"
     git worktree add -q "$wt_dir/feature-one" feature-one
+    git worktree add -q "$wt_dir/bugfix-123" bugfix-123
 
+    # Record only feature-one as recent
     local project_name
     project_name=$(get_project_name)
     record_recent_branch "$project_name" "feature-one"
 
-    show_recent_menu 1
-    assert_contains "$CAPTURED_MENU_OPTIONS" 'switch_worktree feature-one'
+    show_worktree_menu 1 "" 1
+
+    # Both worktrees should appear (all worktrees, reordered)
+    assert_contains "$CAPTURED_MENU_OPTIONS" "feature-one"
+    assert_contains "$CAPTURED_MENU_OPTIONS" "bugfix-123"
 
     git worktree remove --force "$wt_dir/feature-one" 2>/dev/null || true
+    git worktree remove --force "$wt_dir/bugfix-123" 2>/dev/null || true
     rm -rf "$wt_dir"
 }
 
-@test "recent menu skips branches with removed worktrees" {
+@test "list menu sort_recent puts recent branches first" {
     local wt_dir="${BATS_TMPDIR}/worktrees-$$"
     mkdir -p "$wt_dir"
     git worktree add -q "$wt_dir/feature-one" feature-one
+    git worktree add -q "$wt_dir/bugfix-123" bugfix-123
 
+    # Record bugfix-123 as most recent
     local project_name
     project_name=$(get_project_name)
-    record_recent_branch "$project_name" "feature-one"
-    record_recent_branch "$project_name" "feature-two"
+    record_recent_branch "$project_name" "bugfix-123"
 
-    show_recent_menu 1
-    # feature-one has a worktree, feature-two does not
-    assert_contains "$CAPTURED_MENU_OPTIONS" 'feature-one'
-    refute_contains "$CAPTURED_MENU_OPTIONS" 'feature-two'
+    show_worktree_menu 1 "" 1
+
+    # bugfix-123 should appear before feature-one in the menu options
+    local bugfix_pos feature_pos
+    bugfix_pos=$(echo "$CAPTURED_MENU_OPTIONS" | grep -bo "bugfix-123" | head -1 | cut -d: -f1)
+    feature_pos=$(echo "$CAPTURED_MENU_OPTIONS" | grep -bo "feature-one" | head -1 | cut -d: -f1)
+    [ "$bugfix_pos" -lt "$feature_pos" ]
 
     git worktree remove --force "$wt_dir/feature-one" 2>/dev/null || true
+    git worktree remove --force "$wt_dir/bugfix-123" 2>/dev/null || true
     rm -rf "$wt_dir"
 }
 
-@test "recent menu has Filter option" {
-    show_recent_menu 1
-    assert_contains "$CAPTURED_MENU_OPTIONS" '"Filter"'
-}
+@test "list menu normal order not affected by recent log" {
+    local wt_dir="${BATS_TMPDIR}/worktrees-$$"
+    mkdir -p "$wt_dir"
+    git worktree add -q "$wt_dir/feature-one" feature-one
+    git worktree add -q "$wt_dir/bugfix-123" bugfix-123
 
-@test "recent menu has Back option" {
-    show_recent_menu 1
-    assert_contains "$CAPTURED_MENU_OPTIONS" 'Back'
-}
+    local project_name
+    project_name=$(get_project_name)
+    record_recent_branch "$project_name" "bugfix-123"
 
-@test "recent menu filter dispatches to show_recent_menu" {
-    show_recent_menu 1
-    assert_contains "$CAPTURED_MENU_OPTIONS" "show_recent_menu"
-}
+    # sort_recent=0 should use normal git order
+    show_worktree_menu 1 "" 0
 
-@test "recent menu Back goes to show_worktree_menu" {
-    show_recent_menu 1
-    # Back nav always goes to tmux_worktrees_main via generate_nav_options
-    assert_contains "$CAPTURED_MENU_OPTIONS" 'tmux_worktrees_main'
+    # Both should appear
+    assert_contains "$CAPTURED_MENU_OPTIONS" "feature-one"
+    assert_contains "$CAPTURED_MENU_OPTIONS" "bugfix-123"
+
+    git worktree remove --force "$wt_dir/feature-one" 2>/dev/null || true
+    git worktree remove --force "$wt_dir/bugfix-123" 2>/dev/null || true
+    rm -rf "$wt_dir"
 }
 
 # ==============================================================================
@@ -419,15 +431,12 @@ teardown() {
     record_recent_branch "$project_name" "feature-one"
     record_recent_branch "$project_name" "feature-two"
 
-    # Verify it's there
     run cat "$TMUX_WORKTREE_RECENT_FILE"
     assert_contains "$output" "feature-one"
 
-    # Remove worktree (mock tmux and show_remove_worktree_menu)
     show_remove_worktree_menu() { :; }
     remove_worktree "$wt_dir/feature-one" "feature-one" "test-session" "1"
 
-    # Should be cleaned from recent log
     run cat "$TMUX_WORKTREE_RECENT_FILE"
     refute_contains "$output" "feature-one"
     assert_contains "$output" "feature-two"

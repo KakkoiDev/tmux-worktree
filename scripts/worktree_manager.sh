@@ -198,6 +198,7 @@ get_worktree_data() {
     page=$(validate_page "${1:-1}")
     local filter
     filter=$(limit_filter "${2:-}")
+    local sort_recent=${3:-0}
     local sanitized_filter
     sanitized_filter=$(sanitize_filter "$filter")
     local regex_filter
@@ -218,17 +219,34 @@ get_worktree_data() {
 
     # Log worktree paths to debug file
     if [ "$DEBUG" = "on" ]; then
-        debug_log "get_worktree_data: listing worktrees for page $page"
+        debug_log "get_worktree_data: listing worktrees for page $page sort_recent=$sort_recent"
     fi
 
-    LC_ALL=C git worktree list --porcelain | LC_ALL=C awk \
-        -v project="$project_name" \
-        -v filter="$regex_filter" \
-        -v items_per_page="$ITEMS_PER_PAGE" \
-        -v start="$start_line" \
-        -v end="$end_line" \
-        -v script_path="$script_path" \
-        -f "$SCRIPT_DIR/awk/worktree_data.awk"
+    if [ "$sort_recent" = "1" ]; then
+        # Reorder porcelain: recent branches first, then rest
+        local recent_pipe
+        recent_pipe=$(get_recent_branches "$project_name" | tr '\n' '|' | sed 's/|$//')
+
+        LC_ALL=C git worktree list --porcelain | LC_ALL=C awk \
+            -v recent="$recent_pipe" \
+            -f "$SCRIPT_DIR/awk/worktree_reorder.awk" | LC_ALL=C awk \
+            -v project="$project_name" \
+            -v filter="$regex_filter" \
+            -v items_per_page="$ITEMS_PER_PAGE" \
+            -v start="$start_line" \
+            -v end="$end_line" \
+            -v script_path="$script_path" \
+            -f "$SCRIPT_DIR/awk/worktree_data.awk"
+    else
+        LC_ALL=C git worktree list --porcelain | LC_ALL=C awk \
+            -v project="$project_name" \
+            -v filter="$regex_filter" \
+            -v items_per_page="$ITEMS_PER_PAGE" \
+            -v start="$start_line" \
+            -v end="$end_line" \
+            -v script_path="$script_path" \
+            -f "$SCRIPT_DIR/awk/worktree_data.awk"
+    fi
 }
 
 # Get git branch data with pagination, optional filter, and remote branches
@@ -415,43 +433,50 @@ display_menu() {
     eval "tmux display-menu -T '$title' $options"
 }
 
-# Show worktree list menu with pagination and optional filter
+# Show worktree list menu with pagination, optional filter, and optional recent sort
 show_worktree_menu() {
     require_git_repo || return 1
-    debug_log "show_worktree_menu called: page=${1:-1} filter='${2:-}'"
+    debug_log "show_worktree_menu called: page=${1:-1} filter='${2:-}' sort_recent=${3:-0}"
     local page
     page=$(validate_page "${1:-1}")
     local filter
     filter=$(limit_filter "${2:-}")
+    local sort_recent=${3:-0}
     local script_path="$SCRIPT_DIR/worktree_manager.sh"
 
     # Single combined call for count + data (performance optimization)
     local combined_output
-    combined_output=$(get_worktree_data "$page" "$filter")
+    combined_output=$(get_worktree_data "$page" "$filter" "$sort_recent")
     local total_pages
     total_pages=$(echo "$combined_output" | head -1)
     local worktree_items
     worktree_items=$(echo "$combined_output" | tail -n +2)
 
     local nav_options
-    nav_options=$(generate_nav_options "$page" "$total_pages" "show_worktree_menu" "$filter")
+    nav_options=$(generate_nav_options "$page" "$total_pages" "show_worktree_menu" "$filter" "$sort_recent")
 
-    debug_log "show_worktree_menu: total_pages=$total_pages items_count=$(echo "$worktree_items" | grep -c '\"' || echo 0)"
+    debug_log "show_worktree_menu: total_pages=$total_pages sort_recent=$sort_recent items_count=$(echo "$worktree_items" | grep -c '\"' || echo 0)"
 
-    # Build title with filter indicator
+    # Build title with state indicators
     local title="Worktrees (Page $page/$total_pages)"
+    [ "$sort_recent" = "1" ] && title="$title [Recent]"
     [ -n "$filter" ] && title="$title - Filter: '$filter'"
 
-    # Recent menu option
-    local recent_option="\"Recent\" \"r\" \"display-message \\\"Loading...\\\" ; run-shell \\\"'$script_path' show_recent_menu\\\"\" "
+    # Recent sort toggle
+    local recent_option=""
+    if [ "$sort_recent" = "1" ]; then
+        recent_option="\"All\" \"r\" \"run-shell \\\"'$script_path' show_worktree_menu 1 '$filter' 0\\\"\" "
+    else
+        recent_option="\"Recent\" \"r\" \"run-shell \\\"'$script_path' show_worktree_menu 1 '$filter' 1\\\"\" "
+    fi
 
-    # Filter option (always present)
-    local filter_option="\"Filter\" \"$KEY_FILTER\" \"command-prompt -T search -p 'Filter pattern:' 'run-shell \\\"'$script_path' show_worktree_menu 1 '\\''%1'\\''\\\"'\""
+    # Filter option (preserves sort_recent state)
+    local filter_option="\"Filter\" \"$KEY_FILTER\" \"command-prompt -T search -p 'Filter pattern:' 'run-shell \\\"'$script_path' show_worktree_menu 1 '\\''%1'\\'' $sort_recent\\\"'\""
 
-    # Clear filter option (only when filter active)
+    # Clear filter option (only when filter active, preserves sort_recent)
     local clear_option=""
     if [ -n "$filter" ]; then
-        clear_option="\"Clear filter\" \"$KEY_CLEAR_FILTER\" \"run-shell \\\"'$script_path' show_worktree_menu 1\\\"\""
+        clear_option="\"Clear filter\" \"$KEY_CLEAR_FILTER\" \"run-shell \\\"'$script_path' show_worktree_menu 1 '' $sort_recent\\\"\""
     fi
 
     if [ -n "$worktree_items" ]; then
@@ -459,101 +484,6 @@ show_worktree_menu() {
     else
         debug_log "show_worktree_menu: no worktrees found"
         local all_options="$recent_option$filter_option $clear_option \"(No worktrees found)\" \"\" \"\" $nav_options"
-    fi
-
-    display_menu "$title" "$all_options"
-}
-
-# Show recently accessed worktrees menu with pagination and optional filter
-show_recent_menu() {
-    require_git_repo || return 1
-    debug_log "show_recent_menu called: page=${1:-1} filter='${2:-}'"
-    local page
-    page=$(validate_page "${1:-1}")
-    local filter
-    filter=$(limit_filter "${2:-}")
-    local script_path="$SCRIPT_DIR/worktree_manager.sh"
-
-    local project_name
-    project_name=$(get_project_name)
-
-    # Get all recent branches and validate they still have active worktrees
-    local recent_branches
-    recent_branches=$(get_recent_branches "$project_name")
-
-    # Build worktree lookup (branch -> path) from porcelain output
-    local porcelain
-    porcelain=$(LC_ALL=C git worktree list --porcelain 2>/dev/null)
-
-    local sanitized_filter regex_filter
-    sanitized_filter=$(sanitize_filter "$filter")
-    regex_filter=$(convert_glob_to_regex "$sanitized_filter")
-
-    # Collect valid recent items (branch + path pairs)
-    local valid_branches=""
-    local valid_paths=""
-    local total=0
-    local branch wt_path
-    while IFS= read -r branch; do
-        [ -z "$branch" ] && continue
-
-        # Check worktree still exists
-        wt_path=$(echo "$porcelain" | awk -v b="$branch" '
-            /^worktree/ { path = $2 }
-            /^branch/ { sub("refs/heads/", "", $2); if ($2 == b) print path }
-        ')
-        [ -z "$wt_path" ] && continue
-        [ ! -d "$wt_path" ] && continue
-
-        # Apply filter
-        if [ -n "$regex_filter" ]; then
-            echo "$branch" | grep -qi "$sanitized_filter" || continue
-        fi
-
-        total=$((total + 1))
-        valid_branches="${valid_branches}${branch}"$'\n'
-        valid_paths="${valid_paths}${wt_path}"$'\n'
-    done <<< "$recent_branches"
-
-    # Pagination
-    local total_pages=$(( (total + ITEMS_PER_PAGE - 1) / ITEMS_PER_PAGE ))
-    [ "$total_pages" -lt 1 ] && total_pages=1
-    local start_line=$(( (page - 1) * ITEMS_PER_PAGE + 1 ))
-    local end_line=$(( page * ITEMS_PER_PAGE ))
-
-    # Build menu items for current page
-    local recent_items=""
-    local i=0
-    while IFS= read -r branch; do
-        [ -z "$branch" ] && continue
-        i=$((i + 1))
-        [ "$i" -lt "$start_line" ] && continue
-        [ "$i" -gt "$end_line" ] && break
-
-        wt_path=$(echo "$valid_paths" | sed -n "${i}p")
-        recent_items="$recent_items\"$branch\" \"\" \"display-message \\\"Switching...\\\" ; run-shell \\\"'$script_path' switch_worktree $branch \\\\\\\"$wt_path\\\\\\\"\\\"\" "
-    done <<< "$valid_branches"
-
-    local nav_options
-    nav_options=$(generate_nav_options "$page" "$total_pages" "show_recent_menu" "$filter")
-
-    # Build title
-    local title="Recent (Page $page/$total_pages)"
-    [ -n "$filter" ] && title="$title - Filter: '$filter'"
-
-    # Filter option
-    local filter_option="\"Filter\" \"$KEY_FILTER\" \"command-prompt -T search -p 'Filter pattern:' 'run-shell \\\"'$script_path' show_recent_menu 1 '\\''%1'\\''\\\"'\""
-
-    # Clear filter option
-    local clear_option=""
-    if [ -n "$filter" ]; then
-        clear_option="\"Clear filter\" \"$KEY_CLEAR_FILTER\" \"run-shell \\\"'$script_path' show_recent_menu 1\\\"\""
-    fi
-
-    if [ -n "$recent_items" ]; then
-        local all_options="$filter_option $clear_option $recent_items $nav_options"
-    else
-        local all_options="$filter_option $clear_option \"(No recent worktrees)\" \"\" \"\" $nav_options"
     fi
 
     display_menu "$title" "$all_options"
@@ -1017,8 +947,7 @@ main() {
 
     case "${1:-tmux_worktrees_main}" in
         "tmux_worktrees_main"|"") tmux_worktrees_main ;;
-        "show_worktree_menu") show_worktree_menu "$2" "$3" ;;
-        "show_recent_menu") show_recent_menu "$2" "$3" ;;
+        "show_worktree_menu") show_worktree_menu "$2" "$3" "$4" ;;
         "show_add_worktree_menu") show_add_worktree_menu "$2" "$3" "$4" ;;
         "show_remove_worktree_menu") show_remove_worktree_menu "$2" "$3" ;;
         "remove_worktree") remove_worktree "$2" "$3" "$4" "$5" "$6" ;;

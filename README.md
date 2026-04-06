@@ -48,13 +48,13 @@ prefix + W  →  List  →  select worktree
 
 Creates a session if needed, then switches to it.
 
-### Jump to a recent worktree
+### Sort by recently used
 
 ```
-prefix + W  →  List  →  Recent  →  select worktree
+prefix + W  →  List  →  r (toggle)
 ```
 
-Shows worktrees you have recently switched to or created, ordered newest first. Stale entries (manually deleted worktrees) are filtered out automatically, and entries are cleaned up when a worktree is removed via the Remove menu.
+Press `r` in the List menu to reorder worktrees by recent usage (most recently accessed first). Press `r` again to return to normal order. Filter and pagination work in both views. Recent history is cleaned up automatically when worktrees are removed.
 
 ### Find a branch
 
@@ -121,7 +121,7 @@ The hook runs with a 120-second timeout. On failure, a warning is shown but the 
 | `f` | Filter |
 | `c` | Clear filter |
 | `n` | New branch (in Add menu) |
-| `r` | Recent worktrees (in List menu) / Fetch remote (in Add menu) |
+| `r` | Toggle recent sort (in List menu) / Fetch remote (in Add menu) |
 | `b` | Back |
 | `q` | Quit |
 
