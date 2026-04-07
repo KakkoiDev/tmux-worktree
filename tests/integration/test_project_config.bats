@@ -36,14 +36,6 @@ teardown() {
 # PROJECT CONFIG PARSING TESTS
 # ==============================================================================
 
-@test "_load_project_config: reads post-create-cmd" {
-    echo 'post-create-cmd = npm install' > "$TEST_REPO_DIR/.tmux-worktree.conf"
-    POST_CREATE_CMD=""
-    _load_project_config
-
-    assert_equal "npm install" "$POST_CREATE_CMD"
-}
-
 @test "_load_project_config: reads copy-ignored" {
     echo 'copy-ignored = on' > "$TEST_REPO_DIR/.tmux-worktree.conf"
     COPY_IGNORED="off"
@@ -55,27 +47,23 @@ teardown() {
 @test "_load_project_config: skips comments" {
     cat > "$TEST_REPO_DIR/.tmux-worktree.conf" <<'EOF'
 # This is a comment
-post-create-cmd = npm install
+copy-ignored = on
 EOF
-    POST_CREATE_CMD=""
+    COPY_IGNORED="off"
     _load_project_config
 
-    assert_equal "npm install" "$POST_CREATE_CMD"
+    assert_equal "on" "$COPY_IGNORED"
 }
 
 @test "_load_project_config: skips blank lines" {
     cat > "$TEST_REPO_DIR/.tmux-worktree.conf" <<'EOF'
 
-post-create-cmd = npm install
-
 copy-ignored = on
 
 EOF
-    POST_CREATE_CMD=""
     COPY_IGNORED="off"
     _load_project_config
 
-    assert_equal "npm install" "$POST_CREATE_CMD"
     assert_equal "on" "$COPY_IGNORED"
 }
 
@@ -88,49 +76,32 @@ EOF
     assert_equal "off" "$COPY_IGNORED"
 }
 
-@test "_load_project_config: does NOT override explicit post-create-cmd" {
-    echo 'post-create-cmd = npm install' > "$TEST_REPO_DIR/.tmux-worktree.conf"
-    POST_CREATE_CMD="yarn install"
-    _EXPLICIT_OPTIONS="post-create-cmd "
-    _load_project_config
-
-    assert_equal "yarn install" "$POST_CREATE_CMD"
-}
-
 @test "_load_project_config: handles missing config file" {
     rm -f "$TEST_REPO_DIR/.tmux-worktree.conf" 2>/dev/null || true
-    POST_CREATE_CMD="existing"
+    COPY_IGNORED="existing"
     run _load_project_config
     assert_success
 
     # Value should be unchanged
-    assert_equal "existing" "$POST_CREATE_CMD"
+    assert_equal "existing" "$COPY_IGNORED"
 }
 
 @test "_load_project_config: handles malformed lines" {
     cat > "$TEST_REPO_DIR/.tmux-worktree.conf" <<'EOF'
 this has no equals sign
-post-create-cmd = npm install
+copy-ignored = on
 just-key-no-value
 EOF
-    POST_CREATE_CMD=""
+    COPY_IGNORED="off"
     _load_project_config
 
-    assert_equal "npm install" "$POST_CREATE_CMD"
+    assert_equal "on" "$COPY_IGNORED"
 }
 
 @test "_load_project_config: trims whitespace from values" {
-    echo '  post-create-cmd  =  npm install  ' > "$TEST_REPO_DIR/.tmux-worktree.conf"
-    POST_CREATE_CMD=""
+    echo '  copy-ignored  =  on  ' > "$TEST_REPO_DIR/.tmux-worktree.conf"
+    COPY_IGNORED="off"
     _load_project_config
 
-    assert_equal "npm install" "$POST_CREATE_CMD"
-}
-
-@test "_load_project_config: handles value with equals sign" {
-    echo 'post-create-cmd = VAR=1 npm install' > "$TEST_REPO_DIR/.tmux-worktree.conf"
-    POST_CREATE_CMD=""
-    _load_project_config
-
-    assert_equal "VAR=1 npm install" "$POST_CREATE_CMD"
+    assert_equal "on" "$COPY_IGNORED"
 }

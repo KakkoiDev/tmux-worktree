@@ -112,11 +112,6 @@ teardown() {
     assert_contains "$CAPTURED_MENU_OPTIONS" '"Path:'
 }
 
-@test "options menu generates Hook option" {
-    show_options_menu
-    assert_contains "$CAPTURED_MENU_OPTIONS" '"Hook:'
-}
-
 @test "options menu generates Back option" {
     show_options_menu
     assert_contains "$CAPTURED_MENU_OPTIONS" 'Back'

@@ -176,8 +176,6 @@ _load_config_from_tmux() {
     KEY_OPTIONS=$(get_tmux_option "@worktree-key-options" "o")
     FETCH_PRUNE=$(get_tmux_option "@worktree-fetch-prune" "off")
     COPY_IGNORED=$(get_tmux_option "@worktree-copy-ignored" "off")
-    POST_CREATE_CMD=$(get_tmux_option "@worktree-post-create-cmd" "")
-
     # Track which options were explicitly set (non-empty raw value)
     _EXPLICIT_OPTIONS=""
     local _raw_val
@@ -194,13 +192,6 @@ _load_config_from_tmux() {
         _raw_val=$(tmux show-option -gqv "@worktree-copy-ignored" 2>/dev/null)
     fi
     [ -n "$_raw_val" ] && _EXPLICIT_OPTIONS="${_EXPLICIT_OPTIONS}copy-ignored "
-
-    if [ -n "$TMUX_SOCKET" ]; then
-        _raw_val=$(tmux -L "$TMUX_SOCKET" show-option -gqv "@worktree-post-create-cmd" 2>/dev/null)
-    else
-        _raw_val=$(tmux show-option -gqv "@worktree-post-create-cmd" 2>/dev/null)
-    fi
-    [ -n "$_raw_val" ] && _EXPLICIT_OPTIONS="${_EXPLICIT_OPTIONS}post-create-cmd "
 
     # Write to cache file for next invocation
     cat > "$cache_file" 2>/dev/null <<CACHE
@@ -223,77 +214,7 @@ KEY_NEW='$KEY_NEW'
 KEY_OPTIONS='$KEY_OPTIONS'
 FETCH_PRUNE='$FETCH_PRUNE'
 COPY_IGNORED='$COPY_IGNORED'
-POST_CREATE_CMD='$POST_CREATE_CMD'
 CACHE
-}
-
-# ==============================================================================
-# TEMPLATE EXPANSION & HOOK RUNNER
-# ==============================================================================
-
-# Expand template variables in a hook command string
-# Supports {{ branch }}, {{branch}}, {{ project }}, {{ path }}
-# Usage: _expand_hook_vars "template" "branch" "project" "path"
-_expand_hook_vars() {
-    local template="$1"
-    local branch="$2"
-    local project="$3"
-    local path="$4"
-
-    # Sanitize branch and project: allow only safe chars
-    branch=$(echo "$branch" | tr -cd 'a-zA-Z0-9_./-')
-    project=$(echo "$project" | tr -cd 'a-zA-Z0-9_.-')
-
-    # Replace with spaces: {{ branch }}
-    local result="$template"
-    result="${result//\{\{ branch \}\}/$branch}"
-    result="${result//\{\{ project \}\}/$project}"
-    result="${result//\{\{ path \}\}/$path}"
-
-    # Replace without spaces: {{branch}}
-    result="${result//\{\{branch\}\}/$branch}"
-    result="${result//\{\{project\}\}/$project}"
-    result="${result//\{\{path\}\}/$path}"
-
-    echo "$result"
-}
-
-# Run post-create hook command after worktree creation
-# Usage: _run_post_create_hook "branch" "project" "worktree_path"
-_run_post_create_hook() {
-    local branch="$1"
-    local project="$2"
-    local worktree_path="$3"
-
-    # Skip if no command configured
-    [ -z "$POST_CREATE_CMD" ] && return 0
-
-    local expanded_cmd
-    expanded_cmd=$(_expand_hook_vars "$POST_CREATE_CMD" "$branch" "$project" "$worktree_path")
-
-    debug_log "post-create hook: running '$expanded_cmd' in $worktree_path"
-
-    local hook_output
-    hook_output=$(cd "$worktree_path" && \
-        TMUX_WORKTREE=1 \
-        TMUX_WORKTREE_PROJECT="$project" \
-        TMUX_WORKTREE_BRANCH="$branch" \
-        TMUX_WORKTREE_PATH="$worktree_path" \
-        run_with_timeout 120 bash -c "$expanded_cmd" 2>&1)
-    local exit_code=$?
-
-    if [ $exit_code -ne 0 ]; then
-        debug_log "post-create hook FAILED (exit $exit_code): $hook_output"
-        if [ -n "$TMUX_SOCKET" ]; then
-            tmux -L "$TMUX_SOCKET" display-message "Post-create hook failed (exit $exit_code)" 2>/dev/null || true
-        else
-            tmux display-message "Post-create hook failed (exit $exit_code)" 2>/dev/null || true
-        fi
-        return 1
-    fi
-
-    debug_log "post-create hook completed successfully"
-    return 0
 }
 
 # ==============================================================================
@@ -329,13 +250,6 @@ _load_project_config() {
         [ -z "$key" ] && continue
 
         case "$key" in
-            post-create-cmd)
-                # Only apply if not explicitly set via tmux
-                if [[ "$_EXPLICIT_OPTIONS" != *"post-create-cmd"* ]]; then
-                    POST_CREATE_CMD="$value"
-                    debug_log "Project config: post-create-cmd=$value"
-                fi
-                ;;
             fetch-prune)
                 if [[ "$_EXPLICIT_OPTIONS" != *"fetch-prune"* ]]; then
                     FETCH_PRUNE="$value"
@@ -370,7 +284,7 @@ load_config() {
     export WORKTREE_BASE ITEMS_PER_PAGE FETCH_TIMEOUT FETCH_PRUNE KEYBINDING DEBUG
     export KEY_LIST KEY_ADD KEY_REMOVE
     export KEY_NEXT KEY_PREV KEY_FILTER KEY_CLEAR_FILTER KEY_FETCH KEY_BACK KEY_QUIT KEY_NEW
-    export KEY_OPTIONS COPY_IGNORED POST_CREATE_CMD
+    export KEY_OPTIONS COPY_IGNORED
 
     # Load project config (overrides non-explicit options)
     _load_project_config

@@ -91,24 +91,6 @@ set -g @worktree-copy-ignored "on"
 
 Uses Copy-on-Write on macOS for near-instant copies regardless of size.
 
-### Run commands after worktree creation
-
-Set a post-create hook to run automatically in every new worktree:
-
-```bash
-set -g @worktree-post-create-cmd "npm install && cp ../.env ."
-```
-
-Template variables are expanded before execution:
-
-| Variable | Replaced with |
-|----------|---------------|
-| `{{ branch }}` | Branch name |
-| `{{ project }}` | Project/repo name |
-| `{{ path }}` | Worktree directory path |
-
-The hook runs with a 120-second timeout. On failure, a warning is shown but the worktree is kept. Edit at runtime via `prefix + W > Options > Hook`.
-
 ## Keys
 
 | Key | Action |
@@ -160,8 +142,6 @@ set -g @worktree-copy-ignored "on"
 # Prune remote-tracking branches deleted upstream on fetch (default: off)
 set -g @worktree-fetch-prune "on"
 
-# Run command after worktree creation (default: none)
-set -g @worktree-post-create-cmd "npm install"
 ```
 
 ### Project config file
@@ -170,7 +150,6 @@ Commit a `.tmux-worktree.conf` in your repo root to share settings with your tea
 
 ```conf
 # .tmux-worktree.conf - team-shared defaults
-post-create-cmd = npm install && cp ../.env .
 copy-ignored = on
 fetch-prune = off
 ```
