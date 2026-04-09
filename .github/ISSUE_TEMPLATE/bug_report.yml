@@ -84,7 +84,9 @@ body:
       value: |
         ## Debug Information
 
-        Enable debug mode to capture logs:
+        **Errors are always logged** to `~/.tmux-worktree/.tmux-worktree.log` (lines prefixed with `ERROR:`), even without debug mode enabled. Check this file first.
+
+        For detailed tracing, enable debug mode:
         ```bash
         # Add to ~/.tmux.conf
         set -g @worktree-debug "on"
@@ -95,7 +97,9 @@ body:
     id: logs
     attributes:
       label: Debug logs
-      description: Paste relevant lines from `~/.tmux-worktree/.tmux-worktree.log`
+      description: |
+        Paste relevant lines from `~/.tmux-worktree/.tmux-worktree.log`.
+        Error lines are always present. For full trace, enable debug mode first.
       render: shell
     validations:
       required: false

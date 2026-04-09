@@ -94,7 +94,7 @@ fetch_remote_branches() {
         local exit_code=$?
         local error_msg
         error_msg=$(head -1 "$error_file" 2>/dev/null | cut -c1-80)
-        debug_log "Fetch failed (exit $exit_code): $(cat "$error_file" 2>/dev/null)"
+        error_log "fetch_remote_branches: cwd=$(pwd) args=$fetch_args exit=$exit_code err=$(cat "$error_file" 2>/dev/null)"
 
         # Show first line of error (truncated) or generic message
         if [ -n "$error_msg" ]; then
@@ -116,6 +116,7 @@ fetch_remote_branches() {
 get_project_name() {
     # Fast path: use env var if in managed session
     if [ -n "$TMUX_WORKTREE_PROJECT" ]; then
+        debug_log "get_project_name: from env=$TMUX_WORKTREE_PROJECT"
         echo "$TMUX_WORKTREE_PROJECT"
         return
     fi
@@ -134,7 +135,10 @@ get_project_name() {
         name=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)")
     fi
     # Sanitize: allow only alphanumeric, dash, underscore, dot
-    echo "$name" | tr -cd 'a-zA-Z0-9_.-'
+    local result
+    result=$(echo "$name" | tr -cd 'a-zA-Z0-9_.-')
+    debug_log "get_project_name: resolved=$result (git-common-dir=$git_common_dir)"
+    echo "$result"
 }
 
 # Remove worktree helper function
@@ -164,7 +168,7 @@ remove_worktree() {
             debug_log "remove_worktree: worktree removed OK"
             tmux display-message "Worktree removed (branch kept): $branch_name"
         else
-            debug_log "remove_worktree: FAILED to remove worktree: $error_output"
+            error_log "remove_worktree: path=$worktree_path branch=$branch_name exit=$exit_code err=$error_output"
             local error_msg
             error_msg=$(echo "$error_output" | head -1 | cut -c1-60)
             if [ -n "$error_msg" ]; then
@@ -545,6 +549,9 @@ copy_ignored_files() {
     done <<< "$ignored_items"
 
     debug_log "copy_ignored_files: copied=$copied failed=$failed"
+    if [ "$failed" -gt 0 ]; then
+        error_log "copy_ignored_files: $failed items failed to copy from $primary to $target_path"
+    fi
 
     if [ "$copied" -gt 0 ]; then
         tmux display-message "Copied $copied ignored item(s) to new worktree"
@@ -558,6 +565,7 @@ _setup_worktree() {
     local worktree_path="$2"
     local session_name="$3"
     local project_name="$4"
+    debug_log "_setup_worktree: branch=$branch path=$worktree_path session=$session_name project=$project_name"
 
     # Record to recent log
     record_recent_branch "$project_name" "$branch"
@@ -576,7 +584,7 @@ _setup_worktree() {
         debug_log "_setup_worktree: SUCCESS session=$session_name"
         tmux display-message "Created worktree and session: $session_name"
     else
-        debug_log "_setup_worktree: worktree OK but session FAILED"
+        error_log "_setup_worktree: session FAILED branch=$branch path=$worktree_path session=$session_name"
         tmux display-message "Worktree created but session failed - try 'tmux new -s $session_name'"
     fi
 }
@@ -596,6 +604,7 @@ _worktree_vars() {
 switch_worktree() {
     local branch="$1"
     local full_path="$2"
+    debug_log "switch_worktree called: branch='$branch' path='$full_path'"
     local project_name
     project_name=$(get_project_name)
     _worktree_vars "$branch" "$project_name"
@@ -606,14 +615,20 @@ switch_worktree() {
 
     # Switch to existing session or create a new one
     if tmux has-session -t "$session_name" 2>/dev/null; then
+        debug_log "switch_worktree: switching to existing session=$session_name"
         tmux switch-client -t "$session_name"
     else
-        tmux new-session -d -c "$full_path" -s "$session_name" \
+        debug_log "switch_worktree: creating new session=$session_name"
+        if tmux new-session -d -c "$full_path" -s "$session_name" \
             -e "TMUX_WORKTREE=1" \
             -e "TMUX_WORKTREE_PROJECT=$project_name" \
             -e "TMUX_WORKTREE_BRANCH=$branch" \
             -e "TMUX_WORKTREE_PATH=$full_path" && \
-        tmux switch-client -t "$session_name"
+           tmux switch-client -t "$session_name"; then
+            debug_log "switch_worktree: SUCCESS session=$session_name"
+        else
+            error_log "switch_worktree: FAILED branch=$branch path=$full_path session=$session_name"
+        fi
     fi
 }
 
@@ -834,6 +849,7 @@ _cycle_value() {
 set_option() {
     local key="$1"
     local value="$2"
+    debug_log "set_option: key=$key value=$value"
 
     if [ -n "$TMUX_SOCKET" ]; then
         tmux -L "$TMUX_SOCKET" set-option -g "$key" "$value"
@@ -932,6 +948,7 @@ health_check() {
 main() {
     # Resolve pane's actual working directory (run-shell uses session CWD, not pane CWD)
     PANE_CWD=$(tmux display-message -p '#{pane_current_path}' 2>/dev/null)
+    debug_log "main: command=${1:-tmux_worktrees_main} PANE_CWD=$PANE_CWD cwd=$(pwd)"
     if [ -n "$PANE_CWD" ] && [ -d "$PANE_CWD" ]; then
         cd "$PANE_CWD" || true
     fi

@@ -208,9 +208,11 @@ set -g status-right '#{?TMUX_WORKTREE,#[fg=green]#{TMUX_WORKTREE_BRANCH},}'
 
 **Keybinding conflict:** Change with `set -g @worktree-keybinding "T"`.
 
-**Debug mode:** Enable with `set -g @worktree-debug "on"` or via `prefix + W → Options`. Logs written to `~/.tmux-worktree/.tmux-worktree.log`.
+**Error logs:** Errors are always logged to `~/.tmux-worktree/.tmux-worktree.log` (lines prefixed with `ERROR:`), even without debug mode. Check this file first when something fails.
 
-**Something else?** [Open an issue](https://github.com/KakkoiDev/tmux-worktree/issues/new) with your tmux version (`tmux -V`), OS, and relevant lines from the debug log.
+**Debug mode:** For detailed tracing, enable with `set -g @worktree-debug "on"` or via `prefix + W > Options`. Logs CWD resolution, branch detection, config loading, and session creation to the same log file.
+
+**Something else?** [Open an issue](https://github.com/KakkoiDev/tmux-worktree/issues/new) with your tmux version (`tmux -V`), OS, and relevant lines from `~/.tmux-worktree/.tmux-worktree.log`.
 
 ## Manual Installation
 

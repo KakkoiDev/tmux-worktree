@@ -276,9 +276,11 @@ load_config() {
     if _is_cache_valid "$cache_file"; then
         # Fast path: read from cache file
         source "$cache_file"
+        debug_log "load_config: from cache=$cache_file"
     else
         # Slow path: load from tmux and write cache
         _load_config_from_tmux "$cache_file"
+        debug_log "load_config: from tmux (cache written to $cache_file)"
     fi
 
     export WORKTREE_BASE ITEMS_PER_PAGE FETCH_TIMEOUT FETCH_PRUNE KEYBINDING DEBUG
