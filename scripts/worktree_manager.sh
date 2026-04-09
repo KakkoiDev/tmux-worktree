@@ -641,11 +641,11 @@ add_worktree() {
     fi
 
     local error_output
-    if [ -n "$remote_ref" ]; then
-        # Remote branch: create tracking local branch
+    if [ -n "$remote_ref" ] && ! git show-ref --verify --quiet "refs/heads/$branch"; then
+        # Remote branch without existing local branch: create tracking local branch
         error_output=$(git worktree add -b "$branch" "$worktree_path" "$remote_ref" 2>&1)
     else
-        # Local branch: check out existing
+        # Local branch (or remote with existing local): check out existing
         error_output=$(git worktree add "$worktree_path" "$branch" 2>&1)
     fi
     local exit_code=$?
