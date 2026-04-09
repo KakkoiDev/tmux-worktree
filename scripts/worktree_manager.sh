@@ -631,10 +631,12 @@ add_worktree() {
     local worktree_path="$_WT_PATH"
     debug_log "add_worktree: project=$project_name session=$session_name path=$worktree_path"
 
-    # Ensure project directory exists
-    if ! mkdir -p "$WORKTREE_BASE/$project_name" 2>/dev/null; then
-        debug_log "add_worktree: FAILED to create $WORKTREE_BASE/$project_name"
-        tmux display-message "Failed to create directory: $WORKTREE_BASE/$project_name (check permissions)"
+    # Ensure parent directory exists (branches with slashes need intermediate dirs)
+    local worktree_parent
+    worktree_parent="$(dirname "$worktree_path")"
+    if ! mkdir -p "$worktree_parent" 2>/dev/null; then
+        debug_log "add_worktree: FAILED to create $worktree_parent"
+        tmux display-message "Failed to create directory: $worktree_parent (check permissions)"
         return 1
     fi
 
@@ -675,10 +677,12 @@ create_new_worktree() {
     local worktree_path="$_WT_PATH"
     debug_log "create_new_worktree: project=$project_name session=$session_name path=$worktree_path"
 
-    # Ensure project directory exists
-    if ! mkdir -p "$WORKTREE_BASE/$project_name" 2>/dev/null; then
-        debug_log "create_new_worktree: FAILED to create $WORKTREE_BASE/$project_name"
-        tmux display-message "Failed to create directory: $WORKTREE_BASE/$project_name (check permissions)"
+    # Ensure parent directory exists (branches with slashes need intermediate dirs)
+    local worktree_parent
+    worktree_parent="$(dirname "$worktree_path")"
+    if ! mkdir -p "$worktree_parent" 2>/dev/null; then
+        debug_log "create_new_worktree: FAILED to create $worktree_parent"
+        tmux display-message "Failed to create directory: $worktree_parent (check permissions)"
         return 1
     fi
 
@@ -734,7 +738,7 @@ show_add_worktree_menu() {
     local new_option="\"New\" \"$KEY_NEW\" \"command-prompt -p 'New branch name:' 'run-shell \\\"'$script_path' create_new_worktree %1\\\"'\""
 
     # Fetch remote option - fetches and refreshes menu with remotes included
-    local fetch_option="\"Fetch remote\" \"$KEY_FETCH\" \"run-shell \\\"'$script_path' fetch_remote_branches && '$script_path' show_add_worktree_menu 1 '$filter' 1\\\"\""
+    local fetch_option="\"Fetch remote\" \"$KEY_FETCH\" \"run-shell \\\"'$script_path' fetch_remote_branches; '$script_path' show_add_worktree_menu 1 '$filter' 1\\\"\""
 
     # Filter option (always present)
     local filter_option="\"Filter\" \"$KEY_FILTER\" \"command-prompt -T search -p 'Filter pattern:' 'run-shell \\\"'$script_path' show_add_worktree_menu 1 '\\''%1'\\'' $include_remotes\\\"'\""
