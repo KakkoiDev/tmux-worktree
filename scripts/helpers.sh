@@ -454,6 +454,13 @@ debug_log() {
     fi
 }
 
+# Always log errors regardless of DEBUG setting
+# Usage: error_log "message"
+error_log() {
+    local log_file="$WORKTREE_BASE/.tmux-worktree.log"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $*" >> "$log_file" 2>/dev/null || true
+}
+
 # ==============================================================================
 # SESSION NAME HELPERS
 # ==============================================================================

@@ -635,16 +635,18 @@ add_worktree() {
     local worktree_parent
     worktree_parent="$(dirname "$worktree_path")"
     if ! mkdir -p "$worktree_parent" 2>/dev/null; then
-        debug_log "add_worktree: FAILED to create $worktree_parent"
+        error_log "add_worktree: FAILED mkdir $worktree_parent"
         tmux display-message "Failed to create directory: $worktree_parent (check permissions)"
         return 1
     fi
 
     local error_output
     if [ -n "$remote_ref" ] && ! git show-ref --verify --quiet "refs/heads/$branch"; then
+        debug_log "add_worktree: creating new local branch from $remote_ref"
         # Remote branch without existing local branch: create tracking local branch
         error_output=$(git worktree add -b "$branch" "$worktree_path" "$remote_ref" 2>&1)
     else
+        debug_log "add_worktree: checking out existing local branch"
         # Local branch (or remote with existing local): check out existing
         error_output=$(git worktree add "$worktree_path" "$branch" 2>&1)
     fi
@@ -654,7 +656,7 @@ add_worktree() {
         debug_log "add_worktree: worktree created at $worktree_path"
         _setup_worktree "$branch" "$worktree_path" "$session_name" "$project_name"
     else
-        debug_log "add_worktree: FAILED git worktree add: $error_output"
+        error_log "add_worktree: cwd=$(pwd) branch=$branch remote_ref=$remote_ref path=$worktree_path exit=$exit_code err=$error_output"
         local error_msg
         error_msg=$(echo "$error_output" | head -1 | cut -c1-60)
         if [ -n "$error_msg" ]; then
@@ -681,7 +683,7 @@ create_new_worktree() {
     local worktree_parent
     worktree_parent="$(dirname "$worktree_path")"
     if ! mkdir -p "$worktree_parent" 2>/dev/null; then
-        debug_log "create_new_worktree: FAILED to create $worktree_parent"
+        error_log "create_new_worktree: FAILED mkdir $worktree_parent"
         tmux display-message "Failed to create directory: $worktree_parent (check permissions)"
         return 1
     fi
@@ -694,7 +696,7 @@ create_new_worktree() {
         debug_log "create_new_worktree: worktree created at $worktree_path"
         _setup_worktree "$branch" "$worktree_path" "$session_name" "$project_name"
     else
-        debug_log "create_new_worktree: FAILED git worktree add: $error_output"
+        error_log "create_new_worktree: cwd=$(pwd) branch=$branch path=$worktree_path exit=$exit_code err=$error_output"
         local error_msg
         error_msg=$(echo "$error_output" | head -1 | cut -c1-60)
         if [ -n "$error_msg" ]; then
