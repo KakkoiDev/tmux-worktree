@@ -485,14 +485,24 @@ run_with_timeout() {
     local seconds="$1"
     shift
 
+    local timeout_cmd=""
     if command -v timeout >/dev/null 2>&1; then
-        # --foreground ensures child processes are killed on timeout
-        timeout --foreground "$seconds" "$@" 2>/dev/null || timeout "$seconds" "$@"
+        timeout_cmd="timeout"
     elif command -v gtimeout >/dev/null 2>&1; then
-        gtimeout --foreground "$seconds" "$@" 2>/dev/null || gtimeout "$seconds" "$@"
-    else
+        timeout_cmd="gtimeout"
+    fi
+
+    if [ -z "$timeout_cmd" ]; then
         # No timeout available - run without timeout protection
         "$@"
+        return
+    fi
+
+    # Test --foreground support once, then run the command exactly once
+    if "$timeout_cmd" --foreground 0.1 true >/dev/null 2>&1; then
+        "$timeout_cmd" --foreground "$seconds" "$@"
+    else
+        "$timeout_cmd" "$seconds" "$@"
     fi
 }
 
