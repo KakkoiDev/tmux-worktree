@@ -180,16 +180,16 @@ _load_config_from_tmux() {
     _EXPLICIT_OPTIONS=""
     local _raw_val
     if [ -n "$TMUX_SOCKET" ]; then
-        _raw_val=$(tmux -L "$TMUX_SOCKET" show-option -gqv "@worktree-fetch-prune" 2>/dev/null)
+        _raw_val=$(tmux -L "$TMUX_SOCKET" show-option -gqv "@worktree-fetch-prune" 2>/dev/null) || true
     else
-        _raw_val=$(tmux show-option -gqv "@worktree-fetch-prune" 2>/dev/null)
+        _raw_val=$(tmux show-option -gqv "@worktree-fetch-prune" 2>/dev/null) || true
     fi
     [ -n "$_raw_val" ] && _EXPLICIT_OPTIONS="${_EXPLICIT_OPTIONS}fetch-prune "
 
     if [ -n "$TMUX_SOCKET" ]; then
-        _raw_val=$(tmux -L "$TMUX_SOCKET" show-option -gqv "@worktree-copy-ignored" 2>/dev/null)
+        _raw_val=$(tmux -L "$TMUX_SOCKET" show-option -gqv "@worktree-copy-ignored" 2>/dev/null) || true
     else
-        _raw_val=$(tmux show-option -gqv "@worktree-copy-ignored" 2>/dev/null)
+        _raw_val=$(tmux show-option -gqv "@worktree-copy-ignored" 2>/dev/null) || true
     fi
     [ -n "$_raw_val" ] && _EXPLICIT_OPTIONS="${_EXPLICIT_OPTIONS}copy-ignored "
 
