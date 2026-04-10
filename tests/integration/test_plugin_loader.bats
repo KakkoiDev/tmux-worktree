@@ -93,7 +93,8 @@ teardown() {
     # Ensure option is not set
     tmux_run set-option -gu "@worktree-items-per-page" 2>/dev/null || true
 
-    load_config
+    # Use reload_config to bypass cache (prior tests may have cached a different value)
+    reload_config
     assert_equal "15" "$ITEMS_PER_PAGE"
 }
 
