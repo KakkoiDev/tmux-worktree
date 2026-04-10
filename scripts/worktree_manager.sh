@@ -575,18 +575,31 @@ _setup_worktree() {
         copy_ignored_files "$worktree_path"
     fi
 
-    if tmux new-session -d -c "$worktree_path" -s "$session_name" \
+    local session_err
+    session_err=$(tmux new-session -d -c "$worktree_path" -s "$session_name" \
            -e "TMUX_WORKTREE=1" \
            -e "TMUX_WORKTREE_PROJECT=$project_name" \
            -e "TMUX_WORKTREE_BRANCH=$branch" \
-           -e "TMUX_WORKTREE_PATH=$worktree_path" && \
-       tmux switch-client -t "$session_name"; then
-        debug_log "_setup_worktree: SUCCESS session=$session_name"
-        tmux display-message "Created worktree and session: $session_name"
-    else
-        error_log "_setup_worktree: session FAILED branch=$branch path=$worktree_path session=$session_name"
+           -e "TMUX_WORKTREE_PATH=$worktree_path" 2>&1)
+    local new_exit=$?
+
+    if [ $new_exit -ne 0 ]; then
+        error_log "_setup_worktree: new-session FAILED exit=$new_exit err=$session_err session=$session_name path=$worktree_path"
         tmux display-message "Worktree created but session failed - try 'tmux new -s $session_name'"
+        return 1
     fi
+
+    session_err=$(tmux switch-client -t "$session_name" 2>&1)
+    local switch_exit=$?
+
+    if [ $switch_exit -ne 0 ]; then
+        error_log "_setup_worktree: switch-client FAILED exit=$switch_exit err=$session_err session=$session_name"
+        tmux display-message "Created session $session_name (switch failed - use 'tmux switch -t $session_name')"
+        return 0
+    fi
+
+    debug_log "_setup_worktree: SUCCESS session=$session_name"
+    tmux display-message "Created worktree and session: $session_name"
 }
 
 # Compute worktree path and session name from branch
