@@ -9,15 +9,16 @@ TEST_DIR := tests
 UNIT_DIR := $(TEST_DIR)/unit
 INTEGRATION_DIR := $(TEST_DIR)/integration
 
-# Find all test files
+# Find all test files (E2E tests excluded from default runs - they require expect)
 UNIT_TESTS := $(wildcard $(UNIT_DIR)/*.bats)
-INTEGRATION_TESTS := $(wildcard $(INTEGRATION_DIR)/*.bats)
+E2E_TESTS := $(wildcard $(INTEGRATION_DIR)/test_menu_e2e.bats)
+INTEGRATION_TESTS := $(filter-out $(E2E_TESTS),$(wildcard $(INTEGRATION_DIR)/*.bats))
 ALL_TESTS := $(UNIT_TESTS) $(INTEGRATION_TESTS)
 
 # Default number of parallel jobs (auto-detect CPU count)
 JOBS ?= $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 
-.PHONY: test test-fast test-unit test-integration test-parallel test-stress test-coverage test-tags test-smoke clean reload help
+.PHONY: test test-fast test-unit test-integration test-e2e test-parallel test-stress test-coverage test-tags test-smoke clean reload help
 
 # Default target
 all: test
@@ -85,6 +86,15 @@ test-filter:
 	fi
 	@$(BATS) --filter "$(FILTER)" $(ALL_TESTS)
 
+# Run E2E menu tests (requires expect, slower - exercises real display-menu interaction)
+test-e2e:
+	@if ! command -v expect >/dev/null 2>&1; then \
+		echo "Error: expect not found (required for E2E tests)"; \
+		exit 1; \
+	fi
+	@echo "Running E2E menu tests..."
+	@$(BATS) $(E2E_TESTS)
+
 # Run only stress tests (slow, high-load scenarios)
 test-stress:
 	@echo "Running stress tests..."
@@ -150,6 +160,7 @@ help:
 	@echo "  make test-fast           - Run only unit tests (fast, no git ops)"
 	@echo "  make test-unit           - Run unit tests"
 	@echo "  make test-integration    - Run integration tests"
+	@echo "  make test-e2e            - Run E2E menu tests (requires expect)"
 	@echo "  make test-parallel       - Run all tests in parallel"
 	@echo "  make test-verbose        - Run all tests with verbose output"
 	@echo "  make test-file FILE=...  - Run a specific test file"

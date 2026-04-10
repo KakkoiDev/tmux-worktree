@@ -1,0 +1,103 @@
+#!/usr/bin/expect -f
+# E2E menu interaction via tmux command mode
+#
+# Attaches to an isolated tmux server, optionally enters command mode
+# to run a tmux command (opening a display-menu), sends key sequence(s)
+# to interact with the menu, then detaches cleanly.
+#
+# Environment variables:
+#   E2E_SOCKET  - tmux socket name (required)
+#   E2E_PREFIX  - prefix key letter, e.g. "a" for Ctrl-A (default: "a")
+#   E2E_CMD     - tmux command to type in command mode (empty = skip)
+#   E2E_KEYS    - pipe-separated key sequence, e.g. "l" or "o|DOWN|ENTER"
+#                 Special tokens: DOWN, UP, ENTER, ESC
+#   E2E_DELAY   - delay between keys in ms (default: 300)
+#   E2E_BIND    - key to send after prefix (for keybinding tests, skips command mode)
+
+set timeout [expr {[info exists env(E2E_TIMEOUT)] ? $env(E2E_TIMEOUT) : 8}]
+log_user 0
+
+# Required
+if {![info exists env(E2E_SOCKET)]} {
+    puts stderr "E2E_SOCKET is required"
+    exit 1
+}
+set socket $env(E2E_SOCKET)
+
+# Optional with defaults
+set prefix_letter [expr {[info exists env(E2E_PREFIX)] ? $env(E2E_PREFIX) : "a"}]
+set tmux_cmd [expr {[info exists env(E2E_CMD)] ? $env(E2E_CMD) : ""}]
+set keys_str [expr {[info exists env(E2E_KEYS)] ? $env(E2E_KEYS) : ""}]
+set delay_ms [expr {[info exists env(E2E_DELAY)] ? $env(E2E_DELAY) : 300}]
+set bind_key [expr {[info exists env(E2E_BIND)] ? $env(E2E_BIND) : ""}]
+
+# Convert prefix letter to control character (a=1, b=2, etc.)
+set prefix_code [expr {[scan $prefix_letter %c] - 96}]
+set ctrl_prefix [format %c $prefix_code]
+
+# Translate a key token to the actual byte sequence
+proc translate_key {token} {
+    switch -exact -- $token {
+        "DOWN"  { return "\033\[B" }
+        "UP"    { return "\033\[A" }
+        "RIGHT" { return "\033\[C" }
+        "LEFT"  { return "\033\[D" }
+        "ENTER" { return "\r" }
+        "ESC"   { return "\033" }
+        "TAB"   { return "\t" }
+        default { return $token }
+    }
+}
+
+# Spawn tmux attach
+spawn tmux -L $socket attach
+
+# Wait for the terminal to initialize
+sleep 0.5
+
+# Mode 1: keybinding - send prefix + bind_key to trigger a menu
+if {$bind_key ne ""} {
+    send "$ctrl_prefix"
+    after 200
+    send "$bind_key"
+    after 800
+}
+
+# Mode 2: command mode - type a tmux command that opens a menu
+if {$tmux_cmd ne ""} {
+    send "$ctrl_prefix"
+    after 200
+    send ":"
+    after 300
+    send "$tmux_cmd\r"
+    after 800
+}
+
+# Send each key in the pipe-separated sequence
+if {$keys_str ne ""} {
+    set keys [split $keys_str "|"]
+    foreach key $keys {
+        set translated [translate_key $key]
+        send -- $translated
+        after $delay_ms
+    }
+}
+
+# Wait for any async run-shell action to complete
+after 1000
+
+# Close any open menu/overlay before detaching.
+# ESC closes display-menu, q closes some menus. Send both to be safe.
+send "\033"
+after 200
+
+# Detach cleanly: prefix + d
+send "$ctrl_prefix"
+after 200
+send "d"
+
+expect {
+    "detached" { exit 0 }
+    eof { exit 0 }
+    timeout { exit 2 }
+}
