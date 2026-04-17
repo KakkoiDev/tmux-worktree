@@ -1187,7 +1187,7 @@ show_options_menu() {
     options="$options\"Items/page: $ITEMS_PER_PAGE\" \"\" \"run-shell \\\"'$script_path' set_option @worktree-items-per-page $next_items\\\"\" "
     options="$options\"Fetch prune: $FETCH_PRUNE\" \"\" \"run-shell \\\"'$script_path' set_option @worktree-fetch-prune $next_fetch_prune\\\"\" "
     options="$options\"Fetch timeout: ${FETCH_TIMEOUT}s\" \"\" \"run-shell \\\"'$script_path' set_option @worktree-fetch-timeout $next_timeout\\\"\" "
-    options="$options\"Max age: ${MAX_AGE_DAYS}d\" \"\" \"run-shell \\\"'$script_path' set_option @worktree-max-age-days $next_age\\\"\" "
+    options="$options\"Stale after: ${MAX_AGE_DAYS}d\" \"\" \"run-shell \\\"'$script_path' set_option @worktree-max-age-days $next_age\\\"\" "
     options="$options\"Path: $dp\" \"\" \"command-prompt -I '$WORKTREE_BASE' -p 'Worktree path:' 'run-shell \\\"'\\'''$script_path' set_option @worktree-path %1'\\''\\\"'\" "
     options="$options\"← Back\" \"$KEY_BACK\" \"run-shell \\\"'$script_path' tmux_worktrees_main\\\"\""
 

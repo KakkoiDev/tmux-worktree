@@ -253,20 +253,20 @@ _cleanup_worktrees() {
 # Options menu (Max age row + cycle)
 # ==============================================================================
 
-@test "Options menu: shows Max age row" {
+@test "Options menu: shows Stale after row" {
     show_options_menu
-    assert_contains "$CAPTURED_MENU_OPTIONS" "Max age:"
+    assert_contains "$CAPTURED_MENU_OPTIONS" "Stale after:"
 }
 
-@test "Options menu: Max age cycle dispatches set_option" {
+@test "Options menu: Stale after cycle dispatches set_option" {
     show_options_menu
     assert_contains "$CAPTURED_MENU_OPTIONS" "set_option @worktree-max-age-days"
 }
 
-@test "Options menu: Max age shows current value" {
+@test "Options menu: Stale after shows current value" {
     tmux_set_option "@worktree-max-age-days" "90"
     show_options_menu
-    assert_contains "$CAPTURED_MENU_OPTIONS" "Max age: 90d"
+    assert_contains "$CAPTURED_MENU_OPTIONS" "Stale after: 90d"
 }
 
 @test "Options menu: cycle follows MAX_AGE_CHOICES" {
