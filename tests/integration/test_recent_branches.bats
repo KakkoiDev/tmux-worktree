@@ -124,7 +124,9 @@ teardown() {
     count=$(wc -l < "$TMUX_WORKTREE_RECENT_FILE" | tr -d ' ')
     assert_equal "1" "$count"
     run cat "$TMUX_WORKTREE_RECENT_FILE"
-    assert_equal "proj:feature-two" "$output"
+    # New format is "<ts> proj:feature-two"; only care that exact match remains and siblings go.
+    assert_matches "^[0-9]+ proj:feature-two$" "$output"
+    refute_contains "$output" " proj:feature$"
 }
 
 @test "remove_recent_branch scoped to project" {

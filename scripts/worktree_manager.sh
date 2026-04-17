@@ -226,6 +226,24 @@ get_worktree_data() {
         debug_log "get_worktree_data: listing worktrees for page $page sort_recent=$sort_recent"
     fi
 
+    # Build "branch|age;..." annotations from the recent log
+    local now recent_ages=""
+    now=$(date +%s)
+    local _entry _ts _branch
+    while IFS= read -r _entry; do
+        [ -z "$_entry" ] && continue
+        _ts="${_entry%% *}"
+        _branch="${_entry#* }"
+        [ -z "$_branch" ] && continue
+        local _age
+        _age=$(format_age_short "$_ts" "$now")
+        if [ -n "$recent_ages" ]; then
+            recent_ages="${recent_ages};${_branch}|${_age}"
+        else
+            recent_ages="${_branch}|${_age}"
+        fi
+    done < <(get_recent_entries "$project_name")
+
     if [ "$sort_recent" = "1" ]; then
         # Reorder porcelain: recent branches first, then rest
         local recent_pipe
@@ -240,6 +258,7 @@ get_worktree_data() {
             -v start="$start_line" \
             -v end="$end_line" \
             -v script_path="$script_path" \
+            -v recent_ages="$recent_ages" \
             -f "$SCRIPT_DIR/awk/worktree_data.awk"
     else
         LC_ALL=C git worktree list --porcelain | LC_ALL=C awk \
@@ -249,6 +268,7 @@ get_worktree_data() {
             -v start="$start_line" \
             -v end="$end_line" \
             -v script_path="$script_path" \
+            -v recent_ages="$recent_ages" \
             -f "$SCRIPT_DIR/awk/worktree_data.awk"
     fi
 }
@@ -365,6 +385,108 @@ get_branch_page_count() {
         -v filter="$regex_filter" \
         -f "$SCRIPT_DIR/awk/branch_count.awk")
     echo $(( (total + ITEMS_PER_PAGE - 1) / ITEMS_PER_PAGE ))
+}
+
+# Build the (recent_ts_pairs, recent_age_pairs) strings from the recent log.
+# Exports _STALE_TS_PAIRS and _STALE_AGE_PAIRS for the caller.
+_build_stale_context() {
+    local project_name="$1"
+    local now="$2"
+
+    _STALE_TS_PAIRS=""
+    _STALE_AGE_PAIRS=""
+
+    local _entry _ts _branch _age
+    while IFS= read -r _entry; do
+        [ -z "$_entry" ] && continue
+        _ts="${_entry%% *}"
+        _branch="${_entry#* }"
+        [ -z "$_branch" ] && continue
+
+        _age=$(format_age_short "$_ts" "$now")
+        if [ -n "$_STALE_TS_PAIRS" ]; then
+            _STALE_TS_PAIRS="${_STALE_TS_PAIRS};${_branch}|${_ts}"
+            _STALE_AGE_PAIRS="${_STALE_AGE_PAIRS};${_branch}|${_age}"
+        else
+            _STALE_TS_PAIRS="${_branch}|${_ts}"
+            _STALE_AGE_PAIRS="${_branch}|${_age}"
+        fi
+    done < <(get_recent_entries "$project_name")
+}
+
+# Count stale worktrees for a given age threshold (ignores pagination / filter).
+get_stale_worktree_count() {
+    local threshold_days="${1:-${MAX_AGE_DAYS:-30}}"
+    local filter=${2:-}
+    local sanitized_filter regex_filter
+    sanitized_filter=$(sanitize_filter "$filter")
+    regex_filter=$(convert_glob_to_regex "$sanitized_filter")
+
+    local now threshold_seconds
+    now=$(date +%s)
+    threshold_seconds=$(( threshold_days * 86400 ))
+
+    local project_name
+    project_name=$(get_project_name)
+    _build_stale_context "$project_name" "$now"
+
+    local _current_dir
+    _current_dir=$(pwd -P 2>/dev/null || pwd)
+
+    LC_ALL=C git worktree list --porcelain | LC_ALL=C awk \
+        -v current_dir="$_current_dir" \
+        -v filter="$regex_filter" \
+        -v threshold_seconds="$threshold_seconds" \
+        -v now="$now" \
+        -v recent_ts_pairs="$_STALE_TS_PAIRS" \
+        -f "$SCRIPT_DIR/awk/stale_count.awk" 2>/dev/null
+}
+
+# Get stale worktree menu data (paginated).
+# Output: Line 1 = total_pages, Line 2 = space-separated menu items
+get_stale_worktree_data() {
+    local threshold_days="${1:-${MAX_AGE_DAYS:-30}}"
+    local page
+    page=$(validate_page "${2:-1}")
+    local filter
+    filter=$(limit_filter "${3:-}")
+    local sanitized_filter regex_filter
+    sanitized_filter=$(sanitize_filter "$filter")
+    regex_filter=$(convert_glob_to_regex "$sanitized_filter")
+    local start_line=$(( (page - 1) * ITEMS_PER_PAGE + 1 ))
+    local end_line=$(( page * ITEMS_PER_PAGE ))
+
+    local now threshold_seconds
+    now=$(date +%s)
+    threshold_seconds=$(( threshold_days * 86400 ))
+
+    local project_name
+    project_name=$(get_project_name)
+    local script_path="$SCRIPT_DIR/worktree_manager.sh"
+    _build_stale_context "$project_name" "$now"
+
+    if [ "$DEBUG" = "on" ]; then
+        debug_log "get_stale_worktree_data: threshold=${threshold_days}d page=$page filter='$filter'"
+    fi
+
+    local _current_dir
+    _current_dir=$(pwd -P 2>/dev/null || pwd)
+
+    LC_ALL=C git worktree list --porcelain | LC_ALL=C awk \
+        -v current_dir="$_current_dir" \
+        -v script_path="$script_path" \
+        -v current_page="$page" \
+        -v project="$project_name" \
+        -v filter="$regex_filter" \
+        -v items_per_page="$ITEMS_PER_PAGE" \
+        -v start="$start_line" \
+        -v end="$end_line" \
+        -v threshold_days="$threshold_days" \
+        -v threshold_seconds="$threshold_seconds" \
+        -v now="$now" \
+        -v recent_ts_pairs="$_STALE_TS_PAIRS" \
+        -v recent_age_pairs="$_STALE_AGE_PAIRS" \
+        -f "$SCRIPT_DIR/awk/stale_data.awk"
 }
 
 get_removable_worktree_page_count() {
@@ -816,6 +938,16 @@ show_remove_worktree_menu() {
     local title="Remove Worktree (Page $page/$total_pages)"
     [ -n "$filter" ] && title="$title - Filter: '$filter'"
 
+    # Bulk-remove entry point (hidden when count=0). Always filtered against the
+    # full worktree set (not the page filter) so it reflects what the submenu
+    # will show.
+    local bulk_option=""
+    local stale_count
+    stale_count=$(get_stale_worktree_count "$MAX_AGE_DAYS")
+    if [ "$stale_count" -gt 0 ]; then
+        bulk_option="\"Remove older than ${MAX_AGE_DAYS}d ($stale_count)\" \"X\" \"display-message \\\"Loading...\\\" ; run-shell \\\"'$script_path' show_bulk_remove_preview_menu $MAX_AGE_DAYS\\\"\" "
+    fi
+
     # Filter option (always present)
     local filter_option="\"Filter\" \"$KEY_FILTER\" \"command-prompt -T search -p 'Filter pattern:' 'run-shell \\\"'$script_path' show_remove_worktree_menu 1 '\\''%1'\\''\\\"'\""
 
@@ -826,13 +958,159 @@ show_remove_worktree_menu() {
     fi
 
     if [ -n "$worktree_items" ]; then
-        local all_options="$filter_option $clear_option $worktree_items $nav_options"
+        local all_options="$bulk_option$filter_option $clear_option $worktree_items $nav_options"
     else
         debug_log "show_remove_worktree_menu: no removable worktrees found"
-        local all_options="$filter_option $clear_option \"(No removable worktrees found)\" \"\" \"\" $nav_options"
+        local all_options="$bulk_option$filter_option $clear_option \"(No removable worktrees found)\" \"\" \"\" $nav_options"
     fi
 
     display_menu "$title" "$all_options"
+}
+
+# Show preview menu for bulk-remove of worktrees older than threshold_days.
+# Layout: [Remove all N] [per-worktree rows] [nav].
+show_bulk_remove_preview_menu() {
+    require_git_repo || return 1
+    local threshold_days="${1:-${MAX_AGE_DAYS:-30}}"
+    local page
+    page=$(validate_page "${2:-1}")
+    local filter
+    filter=$(limit_filter "${3:-}")
+    local script_path="$SCRIPT_DIR/worktree_manager.sh"
+
+    debug_log "show_bulk_remove_preview_menu: threshold=${threshold_days}d page=$page filter='$filter'"
+
+    local combined_output total_pages items count
+    combined_output=$(get_stale_worktree_data "$threshold_days" "$page" "$filter")
+    total_pages=$(echo "$combined_output" | head -1)
+    items=$(echo "$combined_output" | tail -n +2)
+    count=$(get_stale_worktree_count "$threshold_days" "$filter")
+
+    local nav_options
+    nav_options=$(generate_nav_options "$page" "$total_pages" "show_bulk_remove_preview_menu" "$filter" "$threshold_days")
+
+    local title="Stale Worktrees >${threshold_days}d (Page $page/$total_pages)"
+    [ -n "$filter" ] && title="$title - Filter: '$filter'"
+
+    local remove_all_option=""
+    if [ "$count" -gt 0 ]; then
+        remove_all_option="\"Remove all $count\" \"X\" \"command-prompt -p 'Remove $count worktrees older than ${threshold_days}d? Type yes:' 'run-shell \\\"'$script_path' bulk_remove_worktrees $threshold_days '\\''%1'\\''\\\"'\" "
+    fi
+
+    local filter_option="\"Filter\" \"$KEY_FILTER\" \"command-prompt -T search -p 'Filter pattern:' 'run-shell \\\"'$script_path' show_bulk_remove_preview_menu $threshold_days 1 '\\''%1'\\''\\\"'\""
+
+    local clear_option=""
+    if [ -n "$filter" ]; then
+        clear_option="\"Clear filter\" \"$KEY_CLEAR_FILTER\" \"run-shell \\\"'$script_path' show_bulk_remove_preview_menu $threshold_days 1\\\"\""
+    fi
+
+    local all_options
+    if [ -n "$items" ] && [ "$count" -gt 0 ]; then
+        all_options="$remove_all_option$filter_option $clear_option $items $nav_options"
+    else
+        all_options="$filter_option $clear_option \"(No stale worktrees found)\" \"\" \"\" $nav_options"
+    fi
+
+    display_menu "$title" "$all_options"
+}
+
+# Bulk-remove all worktrees older than threshold_days. Called from the confirm prompt.
+# Second arg is the user's typed confirmation string (must equal "yes" exactly).
+bulk_remove_worktrees() {
+    require_git_repo || return 1
+    local threshold_days="$1"
+    local confirm="${2:-}"
+
+    if [ "$confirm" != "yes" ]; then
+        tmux display-message "Bulk remove cancelled"
+        return 0
+    fi
+
+    local now threshold_seconds
+    now=$(date +%s)
+    threshold_seconds=$(( threshold_days * 86400 ))
+
+    local project_name
+    project_name=$(get_project_name)
+    _build_stale_context "$project_name" "$now"
+
+    # Collect (worktree_path, branch) rows via the count awk adapted to emit paths.
+    # We reuse stale_data.awk schema indirectly by re-parsing porcelain here.
+    local removed=0 failed=0
+    local wt_path=""
+    local branch_name=""
+    local head_sha=""
+    local current_dir
+    current_dir=$(pwd -P 2>/dev/null || pwd)
+
+    # Snapshot the list first so removals don't perturb the iterator.
+    local -a _stale_paths=()
+    local -a _stale_branches=()
+    while IFS= read -r line; do
+        case "$line" in
+            worktree\ *)
+                wt_path="${line#worktree }"
+                branch_name=""
+                head_sha=""
+                ;;
+            HEAD\ *)
+                head_sha="${line#HEAD }"
+                head_sha="${head_sha:0:7}"
+                ;;
+            branch\ *)
+                branch_name="${line#branch refs/heads/}"
+                ;;
+            detached*)
+                branch_name=""
+                ;;
+            "")
+                if [ -n "$wt_path" ] && [ "$wt_path" != "$current_dir" ]; then
+                    local bn="${branch_name:-HEAD@${head_sha}}"
+                    local ts
+                    ts=$(get_recent_timestamp "$project_name" "$bn")
+                    local diff=$((now - ts))
+                    if [ "$diff" -ge "$threshold_seconds" ]; then
+                        _stale_paths+=("$wt_path")
+                        _stale_branches+=("$bn")
+                    fi
+                fi
+                wt_path=""
+                branch_name=""
+                head_sha=""
+                ;;
+        esac
+    done < <(LC_ALL=C git worktree list --porcelain; echo "")
+
+    local i
+    for ((i = 0; i < ${#_stale_paths[@]}; i++)); do
+        local p="${_stale_paths[$i]}"
+        local b="${_stale_branches[$i]}"
+        debug_log "bulk_remove_worktrees: removing path=$p branch=$b"
+
+        if [ ! -d "$p" ]; then
+            worktree_prune
+        else
+            if run_with_timeout 10 git worktree remove --force "$p" >/dev/null 2>&1; then
+                removed=$((removed + 1))
+            else
+                failed=$((failed + 1))
+                error_log "bulk_remove_worktrees: failed to remove $p"
+                continue
+            fi
+        fi
+
+        local sn
+        sn=$(get_session_name "$project_name" "$b")
+        tmux kill-session -t "$sn" 2>/dev/null || tmux kill-session -t "$b" 2>/dev/null || true
+
+        remove_recent_branch "$project_name" "$b"
+    done
+
+    if [ "$failed" -gt 0 ]; then
+        tmux display-message "Bulk remove: $removed removed, $failed failed"
+    else
+        tmux display-message "Bulk remove: $removed worktree(s) removed"
+    fi
 }
 
 # ==============================================================================
@@ -880,12 +1158,25 @@ show_options_menu() {
     local script_path="$SCRIPT_DIR/worktree_manager.sh"
 
     # Compute next values for toggles and cycles
-    local next_copy_ignored next_debug next_items next_timeout next_fetch_prune
+    local next_copy_ignored next_debug next_items next_timeout next_fetch_prune next_age
     next_copy_ignored=$(_cycle_value "$COPY_IGNORED" "off" "on")
     next_debug=$(_cycle_value "$DEBUG" "off" "on")
     next_items=$(_cycle_value "$ITEMS_PER_PAGE" "10" "15" "20" "25")
     next_timeout=$(_cycle_value "$FETCH_TIMEOUT" "15" "30" "60" "120")
     next_fetch_prune=$(_cycle_value "$FETCH_PRUNE" "off" "on")
+
+    # Parse MAX_AGE_CHOICES into an array for cycling.
+    local _age_choices_str="${MAX_AGE_CHOICES:-7,30,90}"
+    IFS=',' read -r -a _age_arr <<< "$_age_choices_str"
+    # Trim whitespace from each entry.
+    local _i
+    for _i in "${!_age_arr[@]}"; do
+        _age_arr[$_i]="${_age_arr[$_i]// /}"
+    done
+    if [ "${#_age_arr[@]}" -eq 0 ]; then
+        _age_arr=("7" "30" "90")
+    fi
+    next_age=$(_cycle_value "$MAX_AGE_DAYS" "${_age_arr[@]}")
 
     local dp
     dp=$(display_path "$WORKTREE_BASE")
@@ -896,6 +1187,7 @@ show_options_menu() {
     options="$options\"Items/page: $ITEMS_PER_PAGE\" \"\" \"run-shell \\\"'$script_path' set_option @worktree-items-per-page $next_items\\\"\" "
     options="$options\"Fetch prune: $FETCH_PRUNE\" \"\" \"run-shell \\\"'$script_path' set_option @worktree-fetch-prune $next_fetch_prune\\\"\" "
     options="$options\"Fetch timeout: ${FETCH_TIMEOUT}s\" \"\" \"run-shell \\\"'$script_path' set_option @worktree-fetch-timeout $next_timeout\\\"\" "
+    options="$options\"Max age: ${MAX_AGE_DAYS}d\" \"\" \"run-shell \\\"'$script_path' set_option @worktree-max-age-days $next_age\\\"\" "
     options="$options\"Path: $dp\" \"\" \"command-prompt -I '$WORKTREE_BASE' -p 'Worktree path:' 'run-shell \\\"'\\'''$script_path' set_option @worktree-path %1'\\''\\\"'\" "
     options="$options\"← Back\" \"$KEY_BACK\" \"run-shell \\\"'$script_path' tmux_worktrees_main\\\"\""
 
@@ -977,6 +1269,8 @@ main() {
         "create_new_worktree") create_new_worktree "$2" ;;
         "fetch_remote_branches") fetch_remote_branches ;;
         "show_options_menu") show_options_menu ;;
+        "show_bulk_remove_preview_menu") show_bulk_remove_preview_menu "$2" "$3" "$4" ;;
+        "bulk_remove_worktrees") bulk_remove_worktrees "$2" "$3" ;;
         "set_option") set_option "$2" "$3" ;;
         "version") show_version ;;
         "health_check") health_check ;;

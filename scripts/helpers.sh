@@ -176,6 +176,13 @@ _load_config_from_tmux() {
     KEY_OPTIONS=$(get_tmux_option "@worktree-key-options" "o")
     FETCH_PRUNE=$(get_tmux_option "@worktree-fetch-prune" "off")
     COPY_IGNORED=$(get_tmux_option "@worktree-copy-ignored" "off")
+
+    local age_raw
+    age_raw=$(get_tmux_option "@worktree-max-age-days" "30")
+    MAX_AGE_DAYS=$(validate_positive_int "$age_raw" "30" "@worktree-max-age-days")
+    MAX_AGE_CHOICES=$(get_tmux_option "@worktree-max-age-choices" "7,30,90")
+    [ -z "$MAX_AGE_CHOICES" ] && MAX_AGE_CHOICES="7,30,90"
+
     # Track which options were explicitly set (non-empty raw value)
     _EXPLICIT_OPTIONS=""
     local _raw_val
@@ -192,6 +199,20 @@ _load_config_from_tmux() {
         _raw_val=$(tmux show-option -gqv "@worktree-copy-ignored" 2>/dev/null) || true
     fi
     [ -n "$_raw_val" ] && _EXPLICIT_OPTIONS="${_EXPLICIT_OPTIONS}copy-ignored "
+
+    if [ -n "$TMUX_SOCKET" ]; then
+        _raw_val=$(tmux -L "$TMUX_SOCKET" show-option -gqv "@worktree-max-age-days" 2>/dev/null) || true
+    else
+        _raw_val=$(tmux show-option -gqv "@worktree-max-age-days" 2>/dev/null) || true
+    fi
+    [ -n "$_raw_val" ] && _EXPLICIT_OPTIONS="${_EXPLICIT_OPTIONS}max-age-days "
+
+    if [ -n "$TMUX_SOCKET" ]; then
+        _raw_val=$(tmux -L "$TMUX_SOCKET" show-option -gqv "@worktree-max-age-choices" 2>/dev/null) || true
+    else
+        _raw_val=$(tmux show-option -gqv "@worktree-max-age-choices" 2>/dev/null) || true
+    fi
+    [ -n "$_raw_val" ] && _EXPLICIT_OPTIONS="${_EXPLICIT_OPTIONS}max-age-choices "
 
     # Write to cache file for next invocation
     cat > "$cache_file" 2>/dev/null <<CACHE
@@ -214,6 +235,8 @@ KEY_NEW='$KEY_NEW'
 KEY_OPTIONS='$KEY_OPTIONS'
 FETCH_PRUNE='$FETCH_PRUNE'
 COPY_IGNORED='$COPY_IGNORED'
+MAX_AGE_DAYS='$MAX_AGE_DAYS'
+MAX_AGE_CHOICES='$MAX_AGE_CHOICES'
 CACHE
 }
 
@@ -262,6 +285,18 @@ _load_project_config() {
                     debug_log "Project config: copy-ignored=$value"
                 fi
                 ;;
+            max-age-days)
+                if [[ "$_EXPLICIT_OPTIONS" != *"max-age-days"* ]]; then
+                    MAX_AGE_DAYS=$(validate_positive_int "$value" "${MAX_AGE_DAYS:-30}" "max-age-days")
+                    debug_log "Project config: max-age-days=$MAX_AGE_DAYS"
+                fi
+                ;;
+            max-age-choices)
+                if [[ "$_EXPLICIT_OPTIONS" != *"max-age-choices"* ]]; then
+                    [ -n "$value" ] && MAX_AGE_CHOICES="$value"
+                    debug_log "Project config: max-age-choices=$MAX_AGE_CHOICES"
+                fi
+                ;;
         esac
     done < "$config_file"
 }
@@ -286,7 +321,7 @@ load_config() {
     export WORKTREE_BASE ITEMS_PER_PAGE FETCH_TIMEOUT FETCH_PRUNE KEYBINDING DEBUG
     export KEY_LIST KEY_ADD KEY_REMOVE
     export KEY_NEXT KEY_PREV KEY_FILTER KEY_CLEAR_FILTER KEY_FETCH KEY_BACK KEY_QUIT KEY_NEW
-    export KEY_OPTIONS COPY_IGNORED
+    export KEY_OPTIONS COPY_IGNORED MAX_AGE_DAYS MAX_AGE_CHOICES
 
     # Load project config (overrides non-explicit options)
     _load_project_config
@@ -376,8 +411,45 @@ _get_recent_file() {
     echo "${TMUX_WORKTREE_RECENT_FILE:-$WORKTREE_BASE/.recent.log}"
 }
 
-# Record a branch switch to the recent log
-# Format: project:branch (one per line, newest at bottom)
+# Migrate legacy log lines to timestamped format.
+# Legacy line: "project:branch"
+# New line:    "<unix_ts> project:branch"
+# Any non-empty line missing a numeric prefix gets stamped with `now`.
+_migrate_recent_log() {
+    local recent_file
+    recent_file=$(_get_recent_file)
+    [ -f "$recent_file" ] || return 0
+
+    local needs_migration=0
+    local line
+    while IFS= read -r line || [ -n "$line" ]; do
+        [ -z "$line" ] && continue
+        if [[ ! "$line" =~ ^[0-9]+[[:space:]] ]]; then
+            needs_migration=1
+            break
+        fi
+    done < "$recent_file"
+
+    [ "$needs_migration" -eq 0 ] && return 0
+
+    local now
+    now=$(date +%s)
+    local tmp="${recent_file}.migrate.$$"
+    while IFS= read -r line || [ -n "$line" ]; do
+        [ -z "$line" ] && continue
+        if [[ "$line" =~ ^[0-9]+[[:space:]] ]]; then
+            echo "$line"
+        else
+            echo "$now $line"
+        fi
+    done < "$recent_file" > "$tmp" && mv "$tmp" "$recent_file"
+
+    debug_log "_migrate_recent_log: stamped legacy entries with $now"
+}
+
+# Record a branch switch to the recent log.
+# Format: "<unix_ts> project:branch" (one per line, newest at bottom).
+# Legacy lines without a timestamp are migrated on first call.
 # Usage: record_recent_branch "project" "branch"
 record_recent_branch() {
     local project="$1"
@@ -388,8 +460,11 @@ record_recent_branch() {
     recent_file=$(_get_recent_file)
     mkdir -p "$(dirname "$recent_file")" 2>/dev/null || true
 
-    # Append entry
-    echo "$project:$branch" >> "$recent_file"
+    _migrate_recent_log
+
+    local now
+    now=$(date +%s)
+    echo "$now $project:$branch" >> "$recent_file"
 
     # Auto-trim for file hygiene
     local count
@@ -399,7 +474,7 @@ record_recent_branch() {
     fi
 }
 
-# Remove a branch from the recent log
+# Remove a branch from the recent log (matches both legacy and timestamped rows).
 # Usage: remove_recent_branch "project" "branch"
 remove_recent_branch() {
     local project="$1"
@@ -410,37 +485,142 @@ remove_recent_branch() {
     recent_file=$(_get_recent_file)
     [ -f "$recent_file" ] || return 0
 
-    # Remove all entries matching project:branch
-    grep -v "^${project}:${branch}$" "$recent_file" > "$recent_file.tmp" 2>/dev/null || true
+    awk -v proj="$project" -v br="$branch" '
+    {
+        rest = $0
+        if (match($0, /^[0-9]+[[:space:]]/)) {
+            rest = substr($0, RLENGTH + 1)
+        }
+        if (rest == proj ":" br) next
+        print $0
+    }' "$recent_file" > "$recent_file.tmp" 2>/dev/null || true
     mv "$recent_file.tmp" "$recent_file"
 }
 
-# Get all recent unique branches for a project (newest first)
-# Returns one branch name per line
-# Usage: get_recent_branches "project"
-get_recent_branches() {
+# Internal: emit "<ts> <branch>" one per unique branch, sorted by newest ts desc.
+# Ties broken by latest append order (line number).
+_recent_entries_for() {
     local project="$1"
-
     local recent_file
     recent_file=$(_get_recent_file)
     [ -f "$recent_file" ] || return 0
 
-    # Reverse, filter by project, deduplicate
-    awk -F: -v proj="$project" '
+    awk -v proj="$project" '
     {
-        lines[NR] = $0
+        rest = $0
+        ts = 0
+        if (match($0, /^[0-9]+[[:space:]]/)) {
+            ts = substr($0, 1, RLENGTH - 1) + 0
+            rest = substr($0, RLENGTH + 1)
+        }
+        colon = index(rest, ":")
+        if (colon == 0) next
+        p = substr(rest, 1, colon - 1)
+        b = substr(rest, colon + 1)
+        if (p != proj) next
+        if (b == "") next
+        if (!(b in max_ts) || ts > max_ts[b] || (ts == max_ts[b] && NR > max_line[b])) {
+            max_ts[b] = ts
+            max_line[b] = NR
+        }
     }
     END {
-        for (i = NR; i >= 1; i--) {
-            split(lines[i], parts, ":")
-            if (parts[1] != proj) continue
-            branch = parts[2]
-            if (branch == "") continue
-            if (seen[branch]) continue
-            seen[branch] = 1
-            print branch
+        n = 0
+        for (b in max_ts) {
+            n++
+            branches[n] = b
+        }
+        # Insertion sort: primary key max_ts desc, secondary key max_line desc
+        for (i = 2; i <= n; i++) {
+            k = branches[i]
+            kts = max_ts[k]
+            kline = max_line[k]
+            j = i - 1
+            while (j > 0) {
+                prev = branches[j]
+                if (max_ts[prev] < kts || (max_ts[prev] == kts && max_line[prev] < kline)) {
+                    branches[j + 1] = prev
+                    j--
+                } else break
+            }
+            branches[j + 1] = k
+        }
+        for (i = 1; i <= n; i++) {
+            print max_ts[branches[i]] " " branches[i]
         }
     }' "$recent_file"
+}
+
+# Get all recent unique branches for a project (newest first).
+# Usage: get_recent_branches "project"
+get_recent_branches() {
+    local project="$1"
+    _recent_entries_for "$project" | awk '{
+        sub(/^[0-9]+ /, "", $0)
+        print $0
+    }'
+}
+
+# Get newest unix timestamp recorded for a specific project/branch.
+# Prints "0" when the branch is not in the log.
+# Usage: get_recent_timestamp "project" "branch"
+get_recent_timestamp() {
+    local project="$1"
+    local branch="$2"
+    [ -z "$project" ] || [ -z "$branch" ] && { echo 0; return 0; }
+
+    local ts
+    ts=$(_recent_entries_for "$project" | awk -v br="$branch" '{
+        if ($2 == br) { print $1; exit }
+    }')
+    if [ -z "$ts" ]; then
+        echo 0
+    else
+        echo "$ts"
+    fi
+}
+
+# Emit "<ts> <branch>" one per unique branch, sorted newest first.
+# Public alias of _recent_entries_for, used by menu rendering.
+# Usage: get_recent_entries "project"
+get_recent_entries() {
+    _recent_entries_for "$1"
+}
+
+# Format a unix timestamp as a short relative-age label.
+# Usage: format_age_short "<ts>" ["<now>"]
+#   ts=0 or empty   -> never
+#   diff < 60s      -> now
+#   diff < 1h       -> Nm
+#   diff < 1d       -> Nh
+#   diff < 1w       -> Nd
+#   otherwise       -> Nw
+format_age_short() {
+    local ts="${1:-0}"
+    local now="${2:-$(date +%s)}"
+
+    [[ "$ts" =~ ^[0-9]+$ ]] || ts=0
+    if [ "$ts" -le 0 ]; then
+        echo "never"
+        return 0
+    fi
+
+    local diff=$((now - ts))
+    if [ "$diff" -lt 0 ]; then
+        diff=0
+    fi
+
+    if [ "$diff" -lt 60 ]; then
+        echo "now"
+    elif [ "$diff" -lt 3600 ]; then
+        echo "$((diff / 60))m"
+    elif [ "$diff" -lt 86400 ]; then
+        echo "$((diff / 3600))h"
+    elif [ "$diff" -lt 604800 ]; then
+        echo "$((diff / 86400))d"
+    else
+        echo "$((diff / 604800))w"
+    fi
 }
 
 # ==============================================================================
