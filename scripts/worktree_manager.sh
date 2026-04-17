@@ -1081,11 +1081,17 @@ bulk_remove_worktrees() {
         esac
     done < <(LC_ALL=C git worktree list --porcelain; echo "")
 
+    local total=${#_stale_paths[@]}
     local i
-    for ((i = 0; i < ${#_stale_paths[@]}; i++)); do
+    for ((i = 0; i < total; i++)); do
         local p="${_stale_paths[$i]}"
         local b="${_stale_branches[$i]}"
-        debug_log "bulk_remove_worktrees: removing path=$p branch=$b"
+        local progress=$((i + 1))
+        debug_log "bulk_remove_worktrees: removing [$progress/$total] path=$p branch=$b"
+
+        # Progress ping for the user. -d 0 forces immediate redraw so long
+        # removals do not leave the status bar stuck on the previous message.
+        tmux display-message -d 0 "Deleting worktree $progress/$total: $b..." 2>/dev/null || true
 
         if [ ! -d "$p" ]; then
             worktree_prune

@@ -324,6 +324,35 @@ _cleanup_worktrees() {
     _cleanup_worktrees
 }
 
+@test "bulk_remove_worktrees: emits progress message per worktree" {
+    local now old
+    now=$(date +%s)
+    old=$((now - 86400 * 60))
+    _seed_worktree "feature-one" "$old"
+    _seed_worktree "feature-two" "$old"
+
+    local captured=""
+    tmux() {
+        if [ "$1" = "display-message" ]; then
+            # Append all positional args so we can assert the message content.
+            captured="${captured}|$*"
+            return 0
+        fi
+        case "$1" in
+            kill-session|switch-client|new-session|has-session) return 0 ;;
+            *) command tmux -L "$TMUX_SOCKET" "$@" ;;
+        esac
+    }
+    export -f tmux
+
+    bulk_remove_worktrees 30 "yes"
+
+    assert_contains "$captured" "Deleting worktree 1/2"
+    assert_contains "$captured" "Deleting worktree 2/2"
+
+    _cleanup_worktrees
+}
+
 @test "bulk_remove_worktrees: no-op when none stale" {
     local now
     now=$(date +%s)
