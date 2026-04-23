@@ -23,9 +23,19 @@ setup() {
     source "$SCRIPTS_DIR/worktree_manager.sh"
 
     init_test_worktree_base
+
+    tmux() {
+        case "$1" in
+            display-message|kill-session|switch-client|new-session|has-session)
+                return 0 ;;
+            *) command tmux -L "$TMUX_SOCKET" "$@" ;;
+        esac
+    }
+    export -f tmux
 }
 
 teardown() {
+    unset -f tmux
     safe_cleanup_worktree_base
 }
 
