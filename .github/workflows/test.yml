@@ -21,7 +21,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y bats libevent-dev ncurses-dev build-essential
+          sudo apt-get install -y bats expect libevent-dev ncurses-dev build-essential
 
       - name: Build tmux ${{ matrix.tmux-version }}
         run: |
@@ -37,6 +37,9 @@ jobs:
 
       - name: Run integration tests
         run: make test-integration
+
+      - name: Run E2E menu tests
+        run: make test-e2e
 
   lint:
     runs-on: ubuntu-latest

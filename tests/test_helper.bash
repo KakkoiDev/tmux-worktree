@@ -5,6 +5,41 @@
 export TMUX_SOCKET="test-worktrees"
 export TMUX_TMPDIR="${BATS_TMPDIR:-/tmp}"
 
+# Unset $TMUX so production `tmux` calls in sourced scripts don't inherit
+# the user's socket. Combined with the stub below, every tmux invocation
+# from test code routes to -L "$TMUX_SOCKET" (the isolated test server).
+unset TMUX TMUX_PANE
+
+# Shadow `tmux` for all tests that load this helper.
+#
+# The stub only kicks in when we're NOT inside a tmux session (i.e. $TMUX is
+# empty). That covers the failure mode we care about: the bats shell itself,
+# which would otherwise send display-menu/display-message to the user's real
+# tmux via an inherited $TMUX.
+#
+# Inside tmux (run-shell subshells during E2E tests), $TMUX is set and we want
+# production tmux calls to reach the real tmux binary untouched.
+#
+# What the stub does when active:
+#   1. UI overlay commands (display-menu, display-popup, display-message,
+#      command-prompt) return 0 without rendering. The test server has no
+#      attached client so they would error anyway.
+#   2. Everything else forwards to the isolated server via -L $TMUX_SOCKET
+#      so session/window ops are real and tests can assert on them.
+tmux() {
+    if [ -n "$TMUX" ]; then
+        command tmux "$@"
+        return
+    fi
+    case "$1" in
+        display-menu|display-popup|display-message|command-prompt)
+            return 0 ;;
+        *)
+            command tmux -L "$TMUX_SOCKET" "$@" ;;
+    esac
+}
+export -f tmux
+
 # Plugin paths (set relative to test_helper.bash location, not test file)
 _HELPER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export PLUGIN_DIR="${_HELPER_DIR}/.."
@@ -17,21 +52,23 @@ export TEST_REPO_DIR=""
 # Shared repo for faster tests (created once per file)
 export SHARED_REPO_DIR=""
 
-# Start isolated tmux server for testing
+# Start isolated tmux server for testing. Uses `command tmux` to bypass the
+# shadow function above (which would silently no-op `new-session`).
 start_tmux_server() {
-    tmux -L "$TMUX_SOCKET" kill-server 2>/dev/null || true
+    command tmux -L "$TMUX_SOCKET" kill-server 2>/dev/null || true
     local start_dir="${TEST_REPO_DIR:-${SHARED_REPO_DIR:-$PWD}}"
-    tmux -L "$TMUX_SOCKET" new-session -d -s "test-session" -c "$start_dir"
+    command tmux -L "$TMUX_SOCKET" new-session -d -s "test-session" -c "$start_dir"
 }
 
 # Stop isolated tmux server
 stop_tmux_server() {
-    tmux -L "$TMUX_SOCKET" kill-server 2>/dev/null || true
+    command tmux -L "$TMUX_SOCKET" kill-server 2>/dev/null || true
 }
 
-# Run tmux command in isolated server
+# Run tmux command in isolated server. Bypasses the shadow so all subcommands
+# (including has-session, kill-session, etc.) reach the real tmux server.
 tmux_run() {
-    tmux -L "$TMUX_SOCKET" "$@"
+    command tmux -L "$TMUX_SOCKET" "$@"
 }
 
 # Set tmux option in isolated server

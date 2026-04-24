@@ -70,6 +70,7 @@ e2e_menu_interact() {
     E2E_KEYS="$keys" \
     E2E_DELAY="${E2E_DELAY:-300}" \
     E2E_TIMEOUT="${E2E_TIMEOUT:-8}" \
+    E2E_CAPTURE_FILE="${E2E_CAPTURE_FILE:-}" \
     expect "$E2E_EXPECT_SCRIPT"
 }
 
@@ -86,6 +87,7 @@ e2e_send_keys() {
     E2E_KEYS="$menu_keys" \
     E2E_DELAY="${E2E_DELAY:-300}" \
     E2E_TIMEOUT="${E2E_TIMEOUT:-8}" \
+    E2E_CAPTURE_FILE="${E2E_CAPTURE_FILE:-}" \
     expect "$E2E_EXPECT_SCRIPT"
 }
 
@@ -170,6 +172,106 @@ e2e_wait_dir() {
 
     echo "Timeout: directory '$dir' not found" >&2
     return 1
+}
+
+# ==============================================================================
+# SCREEN-STATE ASSERTIONS
+#
+# Two capture paths:
+#  - e2e_capture_pane: the pane BUFFER (what's in the scrollback). Does NOT
+#    include display-menu overlays (those are drawn by tmux on top of the
+#    pane and don't land in the buffer).
+#  - e2e_capture_menu / e2e_capture_keybind: the raw TERMINAL bytes delivered
+#    to the attached pty. This DOES include display-menu overlay renders.
+#    Output contains ANSI escape codes - strip before matching if needed.
+# ==============================================================================
+
+# Capture the pane buffer (no overlays). Useful for post-action terminal state.
+e2e_capture_pane() {
+    if [ "$#" -eq 0 ]; then
+        e2e_tmux capture-pane -p -t e2e-session
+    else
+        e2e_tmux capture-pane -p "$@"
+    fi
+}
+
+# Wait until the pane buffer contains a substring.
+e2e_wait_pane_contains() {
+    local needle="$1"
+    local timeout="${2:-5}"
+    local i=0
+
+    while [ "$i" -lt "$((timeout * 2))" ]; do
+        if e2e_capture_pane | grep -qF -- "$needle"; then
+            return 0
+        fi
+        sleep 0.5
+        i=$((i + 1))
+    done
+
+    echo "Timeout: pane did not contain '$needle'" >&2
+    echo "--- pane dump ---" >&2
+    e2e_capture_pane >&2
+    echo "--- end ---" >&2
+    return 1
+}
+
+# Open a menu via expect and capture the terminal bytes (includes overlay).
+# Returns the raw byte stream on stdout.
+# Usage: out=$(e2e_capture_menu "tmux_cmd" "keys")
+e2e_capture_menu() {
+    local tmux_cmd="$1"
+    local keys="${2:-}"
+    local capture_file
+    capture_file=$(mktemp "${BATS_TMPDIR:-/tmp}/e2e-capture.XXXXXX")
+
+    E2E_CAPTURE_FILE="$capture_file" \
+        e2e_menu_interact "$tmux_cmd" "$keys" >/dev/null 2>&1 || true
+
+    cat "$capture_file"
+    rm -f "$capture_file"
+}
+
+# Open a menu via keybinding (prefix + bind_key) and capture overlay bytes.
+# Usage: out=$(e2e_capture_keybind "W" "")
+e2e_capture_keybind() {
+    local bind_key="$1"
+    local keys="${2:-}"
+    local capture_file
+    capture_file=$(mktemp "${BATS_TMPDIR:-/tmp}/e2e-capture.XXXXXX")
+
+    E2E_CAPTURE_FILE="$capture_file" \
+        e2e_send_keys "$bind_key" "$keys" >/dev/null 2>&1 || true
+
+    cat "$capture_file"
+    rm -f "$capture_file"
+}
+
+# Strip ANSI escape sequences from captured terminal output.
+# Usage: printf '%s' "$capture" | e2e_strip_ansi
+e2e_strip_ansi() {
+    sed $'s/\x1b\\[[0-9;?]*[a-zA-Z]//g; s/\x1b[()][A-Z0-9]//g; s/\x1b\\][^\x07]*\x07//g'
+}
+
+# Assert that a menu capture contains all of the given needles (fixed-string).
+# Strips ANSI before matching. Returns 0 if all present, 1 otherwise.
+# Usage: e2e_assert_menu_contains "$capture" "List" "Options" "Quit"
+e2e_assert_menu_contains() {
+    local capture="$1"; shift
+    local clean
+    clean=$(printf '%s' "$capture" | e2e_strip_ansi)
+    local n
+    for n in "$@"; do
+        if ! printf '%s' "$clean" | grep -qF -- "$n"; then
+            echo "Assertion failed: menu did not contain '$n'" >&2
+            echo "--- menu dump (ANSI stripped) ---" >&2
+            printf '%s' "$clean" | tr -cd '\n[:print:]' >&2
+            echo >&2
+            echo "--- end ---" >&2
+            return 1
+        fi
+    done
+    return 0
 }
 
 # ==============================================================================

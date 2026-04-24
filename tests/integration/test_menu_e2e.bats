@@ -206,3 +206,38 @@ teardown() {
     run e2e_send_keys "W" "q"
     assert_success
 }
+
+# ==============================================================================
+# TIER 3: MENU CONTENT ASSERTIONS (capture overlay bytes, grep after strip)
+# ==============================================================================
+
+@test "e2e: main menu renders expected top-level items" {
+    out=$(e2e_capture_menu "run-shell '${SCRIPTS_DIR}/worktree_manager.sh tmux_worktrees_main'" "")
+    e2e_assert_menu_contains "$out" "Git Worktrees" "List" "Add" "Remove" "Options" "Quit"
+}
+
+@test "e2e: options menu renders expected settings" {
+    out=$(e2e_capture_menu "run-shell '${SCRIPTS_DIR}/worktree_manager.sh show_options_menu'" "")
+    e2e_assert_menu_contains "$out" "Options" "Debug" "Items/page"
+}
+
+@test "e2e: list menu shows existing worktrees" {
+    cd "$TEST_REPO_DIR"
+    local project_name
+    project_name=$(basename "$TEST_REPO_DIR")
+    local wt_path="$E2E_WORKTREE_BASE/$project_name/feature-one"
+    git worktree add -q "$wt_path" feature-one
+
+    out=$(e2e_capture_menu "run-shell '${SCRIPTS_DIR}/worktree_manager.sh show_worktree_menu 1'" "")
+    e2e_assert_menu_contains "$out" "feature-one"
+}
+
+@test "e2e: fetch-prune toggle shows current state in options menu" {
+    e2e_tmux set-option -g "@worktree-fetch-prune" "off"
+    out=$(e2e_capture_menu "run-shell '${SCRIPTS_DIR}/worktree_manager.sh show_options_menu'" "")
+    e2e_assert_menu_contains "$out" "Fetch prune" "off"
+
+    e2e_tmux set-option -g "@worktree-fetch-prune" "on"
+    out=$(e2e_capture_menu "run-shell '${SCRIPTS_DIR}/worktree_manager.sh show_options_menu'" "")
+    e2e_assert_menu_contains "$out" "Fetch prune" "on"
+}

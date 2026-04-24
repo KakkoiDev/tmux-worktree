@@ -183,15 +183,14 @@ Located in `tests/integration/`. These tests:
 
 ### Testing Menu Functions
 
-**Important**: Menu functions (`show_worktree_menu`, `show_add_worktree_menu`, `show_remove_worktree_menu`, `tmux_worktrees_main`) call `tmux display-menu` which opens a real tmux menu. Without mocking, these menus will block test execution and require manual closing.
+There are two tiers. Pick based on what you're actually testing.
 
-**Always mock `display_menu` when testing menu functions:**
+**Tier 1 (unit/integration): mock `display_menu`** - fastest, for testing menu *logic* (which options appear, which command strings get built). Does not actually open a menu.
 
 ```bash
-@test "menu test example" {
+@test "menu option list example" {
     source "$SCRIPTS_DIR/worktree_manager.sh"
 
-    # Mock display_menu to prevent opening real tmux menu
     display_menu() {
         echo "TITLE: $1"
         echo "OPTIONS: $2"
@@ -202,6 +201,34 @@ Located in `tests/integration/`. These tests:
     assert_contains "$output" "expected content"
 }
 ```
+
+**Tier 2 (E2E): real tmux + PTY** - for testing menu *rendering* and *interaction*. Runs the plugin against an isolated tmux server, sends keystrokes via `expect`, and (optionally) captures overlay bytes so you can assert on menu content.
+
+Files: `tests/expect_helper.bash`, `tests/fixtures/expect_menu.exp`, `tests/integration/test_menu_e2e.bats`. Run with `make test-e2e`. Requires `expect`.
+
+Isolation: uses socket `-L e2e-worktrees` and `-f /dev/null` so your `~/.tmux.conf` and active session are never touched.
+
+Patterns:
+
+```bash
+# Just fire a dispatch and verify side effect (no menu interaction)
+e2e_tmux run-shell "'$SCRIPTS_DIR/worktree_manager.sh' add_worktree feature-one"
+e2e_wait_dir "$E2E_WORKTREE_BASE/$project/feature-one" 5
+
+# Navigate a menu via real PTY keystrokes, assert via side effect
+run e2e_sub_menu "show_options_menu" "DOWN|ENTER"  # moves, selects 2nd item
+e2e_wait_option "@worktree-debug" "on" 5
+
+# Assert on menu OVERLAY content (requires capture helpers)
+out=$(e2e_capture_menu "run-shell '$SCRIPTS_DIR/worktree_manager.sh show_options_menu'" "")
+e2e_assert_menu_contains "$out" "Options" "Debug" "Items/page"
+```
+
+Why capture is a separate helper: `display-menu` is drawn as an OVERLAY on top of the pane, not into the pane buffer. `tmux capture-pane` only sees the buffer and returns the pane contents (no overlay). `e2e_capture_menu` attaches a real PTY and logs the terminal byte stream, which *does* include overlay renders. Strip ANSI with `e2e_strip_ansi` before pattern-matching if you need plain text.
+
+When to pick which tier:
+- Menu generation, filtering, sorting, option cycling → **Tier 1** (mock).
+- Keybindings, end-to-end click flow, menu overlay text, real tmux quoting → **Tier 2** (E2E).
 
 ## Available Assertions
 

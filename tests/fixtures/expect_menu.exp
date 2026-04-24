@@ -17,6 +17,36 @@
 set timeout [expr {[info exists env(E2E_TIMEOUT)] ? $env(E2E_TIMEOUT) : 8}]
 log_user 0
 
+# Optional: log raw terminal bytes (including menu overlay renders) to a file.
+# The menu overlay is NOT in the tmux pane buffer but IS in the terminal output
+# that the attached client receives. log_file writes only while expect reads,
+# so we replace blocking `after` with `drain` (below) which drives expect.
+if {[info exists env(E2E_CAPTURE_FILE)] && $env(E2E_CAPTURE_FILE) ne ""} {
+    log_file -a -noappend $env(E2E_CAPTURE_FILE)
+}
+
+set capture_enabled [expr {[info exists env(E2E_CAPTURE_FILE)] && $env(E2E_CAPTURE_FILE) ne ""}]
+
+# Flush any pending bytes through expect so log_file writes them. No-op when
+# capture is disabled. Safe: uses a private timeout, restores global.
+proc flush_log {} {
+    global timeout capture_enabled
+    if {!$capture_enabled} { return }
+    set old $timeout
+    set timeout 0.1
+    expect {
+        -re ".+" { exp_continue }
+        timeout  {}
+    }
+    set timeout $old
+}
+
+# Wait `ms` milliseconds, then (if capturing) flush buffered bytes to log.
+proc wait {ms} {
+    after $ms
+    flush_log
+}
+
 # Required
 if {![info exists env(E2E_SOCKET)]} {
     puts stderr "E2E_SOCKET is required"
@@ -53,24 +83,24 @@ proc translate_key {token} {
 spawn tmux -L $socket attach
 
 # Wait for the terminal to initialize
-sleep 0.5
+wait 500
 
 # Mode 1: keybinding - send prefix + bind_key to trigger a menu
 if {$bind_key ne ""} {
     send "$ctrl_prefix"
-    after 200
+    wait 200
     send "$bind_key"
-    after 800
+    wait 800
 }
 
 # Mode 2: command mode - type a tmux command that opens a menu
 if {$tmux_cmd ne ""} {
     send "$ctrl_prefix"
-    after 200
+    wait 200
     send ":"
-    after 300
+    wait 300
     send "$tmux_cmd\r"
-    after 800
+    wait 800
 }
 
 # Send each key in the pipe-separated sequence
@@ -79,21 +109,21 @@ if {$keys_str ne ""} {
     foreach key $keys {
         set translated [translate_key $key]
         send -- $translated
-        after $delay_ms
+        wait $delay_ms
     }
 }
 
 # Wait for any async run-shell action to complete
-after 1000
+wait 1000
 
 # Close any open menu/overlay before detaching.
 # ESC closes display-menu, q closes some menus. Send both to be safe.
 send "\033"
-after 200
+wait 200
 
 # Detach cleanly: prefix + d
 send "$ctrl_prefix"
-after 200
+wait 200
 send "d"
 
 expect {

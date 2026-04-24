@@ -424,15 +424,6 @@ teardown() {
 # ==============================================================================
 
 @test "remove_worktree cleans entry from recent log" {
-    tmux() {
-        case "$1" in
-            display-message|kill-session|switch-client|new-session|has-session)
-                return 0 ;;
-            *) command tmux -L "$TMUX_SOCKET" "$@" ;;
-        esac
-    }
-    export -f tmux
-
     local wt_dir="${BATS_TMPDIR}/worktrees-$$"
     mkdir -p "$wt_dir"
     git worktree add -q "$wt_dir/feature-one" feature-one
@@ -452,7 +443,6 @@ teardown() {
     refute_contains "$output" "feature-one"
     assert_contains "$output" "feature-two"
 
-    unset -f tmux
     rm -rf "$wt_dir"
 }
 
