@@ -52,12 +52,19 @@ export TEST_REPO_DIR=""
 # Shared repo for faster tests (created once per file)
 export SHARED_REPO_DIR=""
 
-# Start isolated tmux server for testing. Uses `command tmux` to bypass the
-# shadow function above (which would silently no-op `new-session`).
+# Start isolated tmux server for testing.
+#   - `command tmux` bypasses the shadow function (which would no-op new-session).
+#   - `-f /dev/null` ignores the user's ~/.tmux.conf so plugins, session-rename
+#     hooks, and custom options can't leak into tests (matches the E2E server).
+#   - A second "_keepalive" session keeps the server alive when production code
+#     under test kills the session tests reference (e.g. remove_worktree on
+#     "test-session"). Without it, the server would exit and the next test's
+#     setup would fail with "no server running".
 start_tmux_server() {
     command tmux -L "$TMUX_SOCKET" kill-server 2>/dev/null || true
     local start_dir="${TEST_REPO_DIR:-${SHARED_REPO_DIR:-$PWD}}"
-    command tmux -L "$TMUX_SOCKET" new-session -d -s "test-session" -c "$start_dir"
+    command tmux -f /dev/null -L "$TMUX_SOCKET" new-session -d -s "test-session" -c "$start_dir"
+    command tmux -L "$TMUX_SOCKET" new-session -d -s "_keepalive" -c "$start_dir"
 }
 
 # Stop isolated tmux server
