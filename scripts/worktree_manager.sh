@@ -697,30 +697,45 @@ _setup_worktree() {
         copy_ignored_files "$worktree_path"
     fi
 
-    local session_err
-    session_err=$(tmux new-session -d -c "$worktree_path" -s "$session_name" \
+    # Capture session_id (immutable, e.g. $0/$1/...) instead of relying on the name.
+    # A user-defined after-new-session hook can rename the session before we use it;
+    # the id survives renames, so we use it for switch-client and the rename-back below.
+    local session_id
+    session_id=$(tmux new-session -d -P -F '#{session_id}' \
+           -c "$worktree_path" -s "$session_name" \
            -e "TMUX_WORKTREE=1" \
            -e "TMUX_WORKTREE_PROJECT=$project_name" \
            -e "TMUX_WORKTREE_BRANCH=$branch" \
            -e "TMUX_WORKTREE_PATH=$worktree_path" 2>&1)
     local new_exit=$?
 
-    if [ $new_exit -ne 0 ]; then
-        error_log "_setup_worktree: new-session FAILED exit=$new_exit err=$session_err session=$session_name path=$worktree_path"
+    if [ $new_exit -ne 0 ] || [ -z "$session_id" ] || [[ "$session_id" != \$* ]]; then
+        error_log "_setup_worktree: new-session FAILED exit=$new_exit out=$session_id session=$session_name path=$worktree_path"
         tmux display-message "Worktree created but session failed - try 'tmux new -s $session_name'"
         return 1
     fi
 
-    session_err=$(tmux switch-client -t "$session_name" 2>&1)
+    # Best-effort restore of the plugin-assigned name if an external hook renamed it.
+    # Skipped when names already match so we don't trigger after-rename-session loops.
+    local current_name
+    current_name=$(tmux display-message -p -t "$session_id" '#{session_name}' 2>/dev/null)
+    if [ -n "$current_name" ] && [ "$current_name" != "$session_name" ]; then
+        if ! tmux rename-session -t "$session_id" "$session_name" 2>/dev/null; then
+            debug_log "_setup_worktree: rename-back blocked sid=$session_id current=$current_name target=$session_name"
+        fi
+    fi
+
+    local session_err
+    session_err=$(tmux switch-client -t "$session_id" 2>&1)
     local switch_exit=$?
 
     if [ $switch_exit -ne 0 ]; then
-        error_log "_setup_worktree: switch-client FAILED exit=$switch_exit err=$session_err session=$session_name"
+        error_log "_setup_worktree: switch-client FAILED exit=$switch_exit err=$session_err session=$session_name sid=$session_id"
         tmux display-message "Created session $session_name (switch failed - use 'tmux switch -t $session_name')"
         return 0
     fi
 
-    debug_log "_setup_worktree: SUCCESS session=$session_name"
+    debug_log "_setup_worktree: SUCCESS session=$session_name sid=$session_id"
     tmux display-message "Created worktree and session: $session_name"
 }
 
@@ -754,15 +769,35 @@ switch_worktree() {
         tmux switch-client -t "$session_name"
     else
         debug_log "switch_worktree: creating new session=$session_name"
-        if tmux new-session -d -c "$full_path" -s "$session_name" \
+        # Capture session_id (immutable). See _setup_worktree for why: external
+        # after-new-session hooks may rename the session out from under us.
+        local session_id
+        session_id=$(tmux new-session -d -P -F '#{session_id}' \
+            -c "$full_path" -s "$session_name" \
             -e "TMUX_WORKTREE=1" \
             -e "TMUX_WORKTREE_PROJECT=$project_name" \
             -e "TMUX_WORKTREE_BRANCH=$branch" \
-            -e "TMUX_WORKTREE_PATH=$full_path" && \
-           tmux switch-client -t "$session_name"; then
-            debug_log "switch_worktree: SUCCESS session=$session_name"
+            -e "TMUX_WORKTREE_PATH=$full_path" 2>&1)
+        local new_exit=$?
+
+        if [ $new_exit -ne 0 ] || [ -z "$session_id" ] || [[ "$session_id" != \$* ]]; then
+            error_log "switch_worktree: new-session FAILED exit=$new_exit out=$session_id branch=$branch path=$full_path session=$session_name"
+            return 1
+        fi
+
+        # Best-effort rename-back, same pattern as _setup_worktree.
+        local current_name
+        current_name=$(tmux display-message -p -t "$session_id" '#{session_name}' 2>/dev/null)
+        if [ -n "$current_name" ] && [ "$current_name" != "$session_name" ]; then
+            if ! tmux rename-session -t "$session_id" "$session_name" 2>/dev/null; then
+                debug_log "switch_worktree: rename-back blocked sid=$session_id current=$current_name target=$session_name"
+            fi
+        fi
+
+        if tmux switch-client -t "$session_id"; then
+            debug_log "switch_worktree: SUCCESS session=$session_name sid=$session_id"
         else
-            error_log "switch_worktree: FAILED branch=$branch path=$full_path session=$session_name"
+            error_log "switch_worktree: switch-client FAILED branch=$branch path=$full_path session=$session_name sid=$session_id"
         fi
     fi
 }

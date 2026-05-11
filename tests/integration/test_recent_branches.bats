@@ -351,11 +351,16 @@ teardown() {
     mkdir -p "$wt_dir"
     git worktree add -q "$wt_dir/feature-one" feature-one
 
+    # Stub `tmux` for the calls the production code makes. new-session must
+    # print a session-id-looking token because _setup_worktree/switch_worktree
+    # capture it from stdout (defense against external rename hooks).
     tmux() {
         case "$1" in
             has-session) return 1 ;;
-            new-session) return 0 ;;
+            new-session) echo '$0'; return 0 ;;
             switch-client) return 0 ;;
+            display-message) return 0 ;;
+            rename-session) return 0 ;;
             *) command tmux -L "$TMUX_SOCKET" "$@" ;;
         esac
     }
@@ -375,9 +380,10 @@ teardown() {
 @test "add_worktree records branch to recent log" {
     tmux() {
         case "$1" in
-            new-session) return 0 ;;
+            new-session) echo '$0'; return 0 ;;
             switch-client) return 0 ;;
             display-message) return 0 ;;
+            rename-session) return 0 ;;
             *) command tmux -L "$TMUX_SOCKET" "$@" ;;
         esac
     }
@@ -398,9 +404,10 @@ teardown() {
 @test "create_new_worktree records branch to recent log" {
     tmux() {
         case "$1" in
-            new-session) return 0 ;;
+            new-session) echo '$0'; return 0 ;;
             switch-client) return 0 ;;
             display-message) return 0 ;;
+            rename-session) return 0 ;;
             *) command tmux -L "$TMUX_SOCKET" "$@" ;;
         esac
     }

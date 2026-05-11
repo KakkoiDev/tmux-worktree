@@ -32,7 +32,18 @@ tmux() {
         return
     fi
     case "$1" in
-        display-menu|display-popup|display-message|command-prompt)
+        display-menu|display-popup|command-prompt)
+            return 0 ;;
+        display-message)
+            # `display-message -p ...` is a query that prints to stdout (no client
+            # required), so route it to the test server. Status-line UI messages
+            # (no -p) need an attached client and are suppressed.
+            local _arg
+            for _arg in "$@"; do
+                case "$_arg" in
+                    -p|-p*) command tmux -L "$TMUX_SOCKET" "$@"; return ;;
+                esac
+            done
             return 0 ;;
         *)
             command tmux -L "$TMUX_SOCKET" "$@" ;;

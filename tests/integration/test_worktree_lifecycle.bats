@@ -428,6 +428,65 @@ teardown() {
     [ ! -d "$WORKTREE_BASE/$project/$branch" ]
 }
 
+# Regression: a user-defined after-new-session hook (e.g. one that auto-renames
+# new sessions to "<repo>-<branch>") could hijack the plugin's session name and
+# break the subsequent switch-client. _setup_worktree must capture session_id
+# at creation and force the intended name back. See _setup_worktree comments.
+@test "create_new_worktree keeps plugin session name when after-new-session hook renames" {
+    local project
+    project=$(get_project_name)
+    local branch="test-cnw-hook-rename"
+    _worktree_vars "$branch" "$project"
+    local expected_session="$_WT_SESSION"
+    local expected_path="$_WT_PATH"
+
+    tmux_run set-hook -g after-new-session 'rename-session stolen-by-hook'
+
+    (create_new_worktree "$branch") 2>/dev/null || true
+
+    run tmux_run has-session -t "$expected_session"
+    local has_expected="$status"
+    run tmux_run has-session -t "stolen-by-hook"
+    local has_stolen="$status"
+
+    # Cleanup BEFORE asserts so the hook never leaks to other tests even on failure
+    tmux_run set-hook -gu after-new-session 2>/dev/null || true
+    tmux_run kill-session -t "$expected_session" 2>/dev/null || true
+    tmux_run kill-session -t "stolen-by-hook" 2>/dev/null || true
+    git worktree remove --force "$expected_path" 2>/dev/null || true
+    git branch -D "$branch" 2>/dev/null || true
+
+    [ "$has_expected" -eq 0 ] || { echo "Expected session '$expected_session' to exist"; return 1; }
+    [ "$has_stolen" -ne 0 ] || { echo "Session 'stolen-by-hook' should NOT exist"; return 1; }
+}
+
+# Same defense, exercised via add_worktree (the path the user originally hit).
+@test "add_worktree keeps plugin session name when after-new-session hook renames" {
+    local project
+    project=$(get_project_name)
+    local branch="feature-one"  # pre-existing branch in shared repo
+    _worktree_vars "$branch" "$project"
+    local expected_session="$_WT_SESSION"
+    local expected_path="$_WT_PATH"
+
+    tmux_run set-hook -g after-new-session 'rename-session stolen-by-hook-2'
+
+    (add_worktree "$branch") 2>/dev/null || true
+
+    run tmux_run has-session -t "$expected_session"
+    local has_expected="$status"
+    run tmux_run has-session -t "stolen-by-hook-2"
+    local has_stolen="$status"
+
+    tmux_run set-hook -gu after-new-session 2>/dev/null || true
+    tmux_run kill-session -t "$expected_session" 2>/dev/null || true
+    tmux_run kill-session -t "stolen-by-hook-2" 2>/dev/null || true
+    git worktree remove --force "$expected_path" 2>/dev/null || true
+
+    [ "$has_expected" -eq 0 ] || { echo "Expected session '$expected_session' to exist"; return 1; }
+    [ "$has_stolen" -ne 0 ] || { echo "Session 'stolen-by-hook-2' should NOT exist"; return 1; }
+}
+
 # ==============================================================================
 # REMOVE_WORKTREE FUNCTION TESTS
 # Note: These tests focus on git operations and verifying branch preservation.
