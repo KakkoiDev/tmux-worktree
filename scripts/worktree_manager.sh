@@ -299,9 +299,12 @@ get_branch_data() {
         branch_cmd="{ git branch --format='%(refname:short)'; git branch -r --format='%(refname:short)' | grep -v 'HEAD'; }"
     fi
 
-    # Get branches that already have worktrees (to filter them out)
+    # Get branches that already have worktrees, with their paths.
+    # Encoded as "branch1|path1;branch2|path2" for branch_data.awk.
     local existing_worktrees
-    existing_worktrees=$(git worktree list --porcelain 2>/dev/null | grep '^branch refs/heads/' | sed 's|^branch refs/heads/||' | tr '\n' '|' | sed 's/|$//')
+    existing_worktrees=$(git worktree list --porcelain 2>/dev/null \
+        | awk '/^worktree / {p=$2} /^branch refs\/heads\// {b=$2; sub("refs/heads/","",b); printf "%s|%s;", b, p}' \
+        | sed 's/;$//')
 
     eval "$branch_cmd" | awk \
         -v project="$project_name" \

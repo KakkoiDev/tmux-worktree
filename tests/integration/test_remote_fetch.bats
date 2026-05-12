@@ -189,17 +189,18 @@ teardown() {
     refute_contains "$output" "origin/master"
     refute_contains "$output" "origin/feature-one"
     refute_contains "$output" "origin/feature-two"
-    # Local branches without worktrees should still appear
-    # Note: master is filtered because the main repo is on master (has worktree)
+    # Local branches without worktrees still appear as plain entries
     assert_contains "$output" '"feature-one"'
     assert_contains "$output" '"feature-two"'
+    # master has a worktree (main repo) so it now shows as [active]
+    assert_contains "$output" '"[active] master"'
 
     # Cleanup
     git remote remove origin
     rm -rf "$remote_dir"
 }
 
-@test "local branches with existing worktrees are filtered out" {
+@test "local branches with existing worktrees show as [active]" {
     source "$SCRIPTS_DIR/worktree_manager.sh"
 
     # Create a worktree for feature-one branch
@@ -209,19 +210,24 @@ teardown() {
 
     run get_branch_data 1 "" 0
     assert_success
-    # feature-one should NOT appear since it has a worktree
-    refute_contains "$output" '"feature-one"'
-    # master is also filtered (main repo is on master)
-    refute_contains "$output" '"master"'
-    # Other branches without worktrees should still appear
+    # feature-one has a worktree -> shown as [active]
+    assert_contains "$output" '"[active] feature-one"'
+    # master is on main repo -> also [active]
+    assert_contains "$output" '"[active] master"'
+    # Other branches without worktrees still appear as plain entries
     assert_contains "$output" '"feature-two"'
     assert_contains "$output" '"bugfix-123"'
+    # Active items must come before plain locals
+    [[ "${output%%feature-two*}" == *"[active] feature-one"* ]]
+    # Action wired to switch_worktree with the worktree path
+    assert_contains "$output" "switch_worktree feature-one"
+    assert_contains "$output" "$wt_path"
 
     # Cleanup
     git worktree remove "$wt_path" --force
 }
 
-@test "remote branches with existing worktrees are filtered out" {
+@test "remote branches with existing worktrees show as [active]" {
     source "$SCRIPTS_DIR/worktree_manager.sh"
 
     # Create a bare remote with an extra branch
@@ -238,12 +244,53 @@ teardown() {
 
     run get_branch_data 1 "" 1
     assert_success
-    # remote-only-branch should NOT appear (has worktree)
-    refute_contains "$output" 'remote-only-branch'
+    # remote-only-branch has a local worktree -> shown as [active] under local name
+    assert_contains "$output" '"[active] remote-only-branch"'
+    # origin/remote-only-branch should not appear as a [remote] entry (local exists)
+    refute_contains "$output" '[remote] origin/remote-only-branch'
 
     # Cleanup
     git worktree remove "$wt_path" --force
     git branch -D remote-only-branch
+    git remote remove origin
+    rm -rf "$remote_dir"
+}
+
+@test "[active] entries sort before plain locals and [remote] entries" {
+    source "$SCRIPTS_DIR/worktree_manager.sh"
+
+    # Create worktrees for two local branches (master is also active via main repo)
+    local wt1="${WORKTREE_BASE}/$(get_project_name)/feature-one"
+    local wt2="${WORKTREE_BASE}/$(get_project_name)/bugfix-123"
+    mkdir -p "$(dirname "$wt1")"
+    git worktree add "$wt1" feature-one
+    git worktree add "$wt2" bugfix-123
+
+    # Add a remote that introduces an extra branch
+    local remote_dir="${TEST_REPO_DIR}-remote"
+    git clone --bare . "$remote_dir"
+    git -C "$remote_dir" branch remote-only-extra master
+    git remote add origin "$remote_dir"
+    git fetch origin
+
+    run get_branch_data 1 "" 1
+    assert_success
+
+    # Locate first occurrence of each kind in the output
+    local active_pos plain_pos remote_pos
+    active_pos=$(echo "$output" | grep -bo '"\[active\]' | head -1 | cut -d: -f1)
+    plain_pos=$(echo "$output" | grep -bo '"feature-two"' | head -1 | cut -d: -f1)
+    remote_pos=$(echo "$output" | grep -bo '"\[remote\]' | head -1 | cut -d: -f1)
+
+    [ -n "$active_pos" ]
+    [ -n "$plain_pos" ]
+    [ -n "$remote_pos" ]
+    [ "$active_pos" -lt "$plain_pos" ]
+    [ "$plain_pos" -lt "$remote_pos" ]
+
+    # Cleanup
+    git worktree remove "$wt1" --force
+    git worktree remove "$wt2" --force
     git remote remove origin
     rm -rf "$remote_dir"
 }
