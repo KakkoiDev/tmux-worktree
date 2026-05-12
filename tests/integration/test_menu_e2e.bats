@@ -25,6 +25,10 @@ setup_file() {
     export E2E_WORKTREE_BASE="/tmp/e2e-worktree-test-$$"
     mkdir -p "$E2E_WORKTREE_BASE"
     e2e_tmux set-option -g "@worktree-path" "$E2E_WORKTREE_BASE"
+
+    # Disable host-session adoption so the pre-named "e2e-session" survives
+    # the rename pass that tmux_worktrees_main performs on entry.
+    e2e_tmux set-option -g "@worktree-adopt-session" "off"
 }
 
 teardown_file() {

@@ -752,6 +752,65 @@ _worktree_vars() {
     _WT_PATH="$WORKTREE_BASE/$project_name/$branch"
 }
 
+# Rename the calling session to "<project>-<branch>" when it predates the
+# plugin (e.g. user started tmux manually before invoking the menu).
+# Optional arg overrides the queried session name (used by tests).
+# Skipped when:
+#   - @worktree-adopt-session option is "off"
+#   - tmux query returns empty (no tmux / no current session)
+#   - HEAD is detached (no canonical branch name)
+#   - current name already starts with "<project>-" (treated as already managed)
+#   - current name already equals the canonical name
+adopt_current_session() {
+    [ "${ADOPT_SESSION:-on}" = "off" ] && return 0
+
+    local current_name="${1:-}"
+    if [ -z "$current_name" ]; then
+        current_name=$(tmux display-message -p '#{session_name}' 2>/dev/null)
+    fi
+    [ -z "$current_name" ] && return 0
+
+    local branch
+    branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+    if [ -z "$branch" ] || [ "$branch" = "HEAD" ]; then
+        debug_log "adopt_current_session: detached or no branch, skipping (current='$current_name')"
+        return 0
+    fi
+
+    local project
+    project=$(get_project_name)
+    [ -z "$project" ] && return 0
+
+    # Compute sanitized prefix used by get_session_name so the prefix check
+    # matches tmux-sanitized session names (e.g. "shared-repo_X-" not
+    # "shared-repo.X-" because tmux replaces "." with "_").
+    local sanitized_prefix
+    sanitized_prefix=$(get_session_name "$project" "")
+
+    # Already plugin-managed (any session under this project's prefix) - leave alone
+    case "$current_name" in
+        "$sanitized_prefix"*) debug_log "adopt_current_session: '$current_name' already has project prefix, skipping"; return 0 ;;
+    esac
+
+    local expected
+    expected=$(get_session_name "$project" "$branch")
+    [ "$current_name" = "$expected" ] && return 0
+
+    if tmux rename-session -t "$current_name" "$expected" 2>/dev/null; then
+        debug_log "adopt_current_session: renamed '$current_name' -> '$expected'"
+        # Propagate plugin env vars to the session so future panes/processes
+        # see the same context as plugin-created sessions.
+        local worktree_path
+        worktree_path=$(git rev-parse --show-toplevel 2>/dev/null)
+        tmux setenv -t "$expected" TMUX_WORKTREE 1 2>/dev/null || true
+        tmux setenv -t "$expected" TMUX_WORKTREE_PROJECT "$project" 2>/dev/null || true
+        tmux setenv -t "$expected" TMUX_WORKTREE_BRANCH "$branch" 2>/dev/null || true
+        [ -n "$worktree_path" ] && tmux setenv -t "$expected" TMUX_WORKTREE_PATH "$worktree_path" 2>/dev/null || true
+    else
+        debug_log "adopt_current_session: rename failed '$current_name' -> '$expected'"
+    fi
+}
+
 # Switch to an existing worktree session (or create one) and record to recent log
 # Usage: switch_worktree "branch" "full_path"
 switch_worktree() {
@@ -1252,6 +1311,12 @@ tmux_worktrees_main() {
     fi
 
     debug_log "git check: $(git rev-parse --git-dir 2>&1 || true)"
+
+    # Adopt the calling session into the plugin's naming convention. Sessions
+    # opened manually by the user (`tmux` from a folder) get a default name
+    # like "windows" or "0"; rename them to <project>-<branch> so they look
+    # like sessions the plugin itself created.
+    adopt_current_session
 
     local script_path="$SCRIPT_DIR/worktree_manager.sh"
     local options='"List" "'"$KEY_LIST"'" "display-message \"Loading worktrees...\" ; run-shell \"'"'"$script_path"'"' show_worktree_menu\"" \

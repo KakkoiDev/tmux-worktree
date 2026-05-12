@@ -649,3 +649,183 @@ teardown() {
     # Cleanup
     git worktree remove --force "$wt_dir"
 }
+
+# ==============================================================================
+# ADOPT_CURRENT_SESSION TESTS
+# Renames sessions started manually by the user (default tmux name like
+# "windows" or "0") to the plugin's <project>-<branch> convention.
+# ==============================================================================
+
+# Helper: tmux sanitizes "." in session names to "_", so the canonical name we
+# observe is whatever get_session_name produces.
+_adopt_canonical_name() {
+    local branch="${1:-master}"
+    get_session_name "$(get_project_name)" "$branch"
+}
+
+@test "adopt_current_session renames default-named session to project-branch" {
+    local expected
+    expected=$(_adopt_canonical_name master)
+    local orig="adopt-windows-1"
+
+    # Ensure no stale session from prior runs
+    tmux_run kill-session -t "$orig" 2>/dev/null || true
+    tmux_run kill-session -t "$expected" 2>/dev/null || true
+
+    tmux_run new-session -d -s "$orig" -c "$TEST_REPO_DIR"
+
+    # Pass session name explicitly to bypass tmux display-message ambiguity in tests
+    adopt_current_session "$orig"
+
+    run tmux_run has-session -t "$expected"
+    local has_expected="$status"
+    run tmux_run has-session -t "$orig"
+    local has_orig="$status"
+
+    tmux_run kill-session -t "$expected" 2>/dev/null || true
+    tmux_run kill-session -t "$orig" 2>/dev/null || true
+
+    [ "$has_expected" -eq 0 ] || { echo "Expected session '$expected' to exist"; return 1; }
+    [ "$has_orig" -ne 0 ] || { echo "Session '$orig' should have been renamed"; return 1; }
+}
+
+@test "adopt_current_session renames numeric default session" {
+    local expected
+    expected=$(_adopt_canonical_name master)
+    local orig="0"
+
+    tmux_run kill-session -t "$orig" 2>/dev/null || true
+    tmux_run kill-session -t "$expected" 2>/dev/null || true
+
+    tmux_run new-session -d -s "$orig" -c "$TEST_REPO_DIR"
+
+    adopt_current_session "$orig"
+
+    run tmux_run has-session -t "$expected"
+    local has_expected="$status"
+
+    tmux_run kill-session -t "$expected" 2>/dev/null || true
+    tmux_run kill-session -t "$orig" 2>/dev/null || true
+
+    [ "$has_expected" -eq 0 ] || { echo "Expected session '$expected' to exist"; return 1; }
+}
+
+@test "adopt_current_session leaves already-canonical session alone" {
+    local canonical
+    canonical=$(_adopt_canonical_name master)
+
+    tmux_run kill-session -t "$canonical" 2>/dev/null || true
+    tmux_run new-session -d -s "$canonical" -c "$TEST_REPO_DIR"
+
+    adopt_current_session "$canonical"
+
+    run tmux_run has-session -t "$canonical"
+    local has_expected="$status"
+
+    tmux_run kill-session -t "$canonical" 2>/dev/null || true
+
+    [ "$has_expected" -eq 0 ] || { echo "Canonical session '$canonical' should still exist"; return 1; }
+}
+
+@test "adopt_current_session leaves plugin-prefixed sessions alone" {
+    # Same project, different branch in the name - user might have switched
+    # branches within an existing plugin session. Leave it alone.
+    local prefixed canonical_master
+    prefixed=$(_adopt_canonical_name feature-one)
+    canonical_master=$(_adopt_canonical_name master)
+
+    tmux_run kill-session -t "$prefixed" 2>/dev/null || true
+    tmux_run kill-session -t "$canonical_master" 2>/dev/null || true
+
+    tmux_run new-session -d -s "$prefixed" -c "$TEST_REPO_DIR"
+
+    adopt_current_session "$prefixed"
+
+    run tmux_run has-session -t "$prefixed"
+    local has_orig="$status"
+    # Canonical name for master should NOT exist (no rename happened)
+    run tmux_run has-session -t "$canonical_master"
+    local has_canonical="$status"
+
+    tmux_run kill-session -t "$prefixed" 2>/dev/null || true
+    tmux_run kill-session -t "$canonical_master" 2>/dev/null || true
+
+    [ "$has_orig" -eq 0 ] || { echo "Session '$prefixed' should still exist"; return 1; }
+    [ "$has_canonical" -ne 0 ] || { echo "Session '$canonical_master' should NOT have been created"; return 1; }
+}
+
+@test "adopt_current_session skips detached HEAD" {
+    local project
+    project=$(get_project_name)
+    local detached_dir="$WORKTREE_BASE/$project/adopt-detached"
+    local orig="adopt-detached-session"
+    mkdir -p "$(dirname "$detached_dir")"
+    git worktree add --detach "$detached_dir" HEAD
+
+    tmux_run kill-session -t "$orig" 2>/dev/null || true
+    tmux_run new-session -d -s "$orig" -c "$detached_dir"
+
+    pushd "$detached_dir" >/dev/null
+    adopt_current_session "$orig"
+    popd >/dev/null
+
+    run tmux_run has-session -t "$orig"
+    local has_orig="$status"
+
+    tmux_run kill-session -t "$orig" 2>/dev/null || true
+    git worktree remove --force "$detached_dir" 2>/dev/null || true
+
+    [ "$has_orig" -eq 0 ] || { echo "Detached HEAD should not trigger rename of '$orig'"; return 1; }
+}
+
+@test "adopt_current_session sets TMUX_WORKTREE env vars on renamed session" {
+    local expected
+    expected=$(_adopt_canonical_name master)
+    local orig="adopt-env-session"
+
+    tmux_run kill-session -t "$orig" 2>/dev/null || true
+    tmux_run kill-session -t "$expected" 2>/dev/null || true
+
+    tmux_run new-session -d -s "$orig" -c "$TEST_REPO_DIR"
+
+    adopt_current_session "$orig"
+
+    run tmux_run show-environment -t "$expected" TMUX_WORKTREE
+    local env_status="$status"
+    local env_output="$output"
+
+    tmux_run kill-session -t "$expected" 2>/dev/null || true
+    tmux_run kill-session -t "$orig" 2>/dev/null || true
+
+    [ "$env_status" -eq 0 ] || { echo "TMUX_WORKTREE env not set on renamed session"; return 1; }
+    [[ "$env_output" == "TMUX_WORKTREE=1" ]] || { echo "Unexpected env value: $env_output"; return 1; }
+}
+
+@test "adopt_current_session is a no-op when tmux query returns empty" {
+    # Explicit empty session name simulates "not in tmux"
+    run adopt_current_session ""
+    assert_success
+}
+
+@test "adopt_current_session is a no-op when @worktree-adopt-session=off" {
+    local orig="adopt-disabled-session"
+    tmux_run kill-session -t "$orig" 2>/dev/null || true
+    tmux_run new-session -d -s "$orig" -c "$TEST_REPO_DIR"
+
+    ADOPT_SESSION=off adopt_current_session "$orig"
+
+    run tmux_run has-session -t "$orig"
+    local has_orig="$status"
+
+    # Canonical session must NOT have been created
+    local canonical
+    canonical=$(_adopt_canonical_name master)
+    run tmux_run has-session -t "$canonical"
+    local has_canonical="$status"
+
+    tmux_run kill-session -t "$orig" 2>/dev/null || true
+    tmux_run kill-session -t "$canonical" 2>/dev/null || true
+
+    [ "$has_orig" -eq 0 ] || { echo "Original session '$orig' should still exist"; return 1; }
+    [ "$has_canonical" -ne 0 ] || { echo "Canonical '$canonical' should NOT have been created"; return 1; }
+}

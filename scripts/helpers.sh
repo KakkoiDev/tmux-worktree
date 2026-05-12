@@ -176,6 +176,7 @@ _load_config_from_tmux() {
     KEY_OPTIONS=$(get_tmux_option "@worktree-key-options" "o")
     FETCH_PRUNE=$(get_tmux_option "@worktree-fetch-prune" "off")
     COPY_IGNORED=$(get_tmux_option "@worktree-copy-ignored" "off")
+    ADOPT_SESSION=$(get_tmux_option "@worktree-adopt-session" "on")
 
     local age_raw
     age_raw=$(get_tmux_option "@worktree-max-age-days" "30")
@@ -235,6 +236,7 @@ KEY_NEW='$KEY_NEW'
 KEY_OPTIONS='$KEY_OPTIONS'
 FETCH_PRUNE='$FETCH_PRUNE'
 COPY_IGNORED='$COPY_IGNORED'
+ADOPT_SESSION='$ADOPT_SESSION'
 MAX_AGE_DAYS='$MAX_AGE_DAYS'
 MAX_AGE_CHOICES='$MAX_AGE_CHOICES'
 CACHE
