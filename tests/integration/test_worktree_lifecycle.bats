@@ -807,6 +807,51 @@ _adopt_canonical_name() {
     assert_success
 }
 
+@test "adopt_session_hook renames default-named session via tmux hook entry point" {
+    local orig="adopt-hook-windows"
+    local expected
+    expected=$(_adopt_canonical_name master)
+
+    tmux_run kill-session -t "$orig" 2>/dev/null || true
+    tmux_run kill-session -t "$expected" 2>/dev/null || true
+    tmux_run new-session -d -s "$orig" -c "$TEST_REPO_DIR"
+
+    adopt_session_hook "$orig" "$TEST_REPO_DIR"
+
+    run tmux_run has-session -t "$expected"
+    local has_expected="$status"
+    run tmux_run has-session -t "$orig"
+    local has_orig="$status"
+
+    tmux_run kill-session -t "$expected" 2>/dev/null || true
+    tmux_run kill-session -t "$orig" 2>/dev/null || true
+
+    [ "$has_expected" -eq 0 ] || { echo "Hook should have renamed to '$expected'"; return 1; }
+    [ "$has_orig" -ne 0 ] || { echo "Original session '$orig' should be gone"; return 1; }
+}
+
+@test "adopt_session_hook is a no-op when session_path is outside any git repo" {
+    local orig="adopt-hook-nogit"
+    local non_git_dir="/tmp/adopt-hook-nogit-$$"
+    mkdir -p "$non_git_dir"
+
+    run tmux_run has-session -t "$orig"
+    if [ "$status" -eq 0 ]; then tmux_run kill-session -t "$orig"; fi
+    run tmux_run new-session -d -s "$orig" -c "$non_git_dir"
+    [ "$status" -eq 0 ] || skip "could not create session"
+
+    adopt_session_hook "$orig" "$non_git_dir"
+
+    run tmux_run has-session -t "$orig"
+    local has_orig="$status"
+
+    run tmux_run has-session -t "$orig"
+    if [ "$status" -eq 0 ]; then tmux_run kill-session -t "$orig"; fi
+    rm -rf "$non_git_dir"
+
+    [ "$has_orig" -eq 0 ] || { echo "Non-git session '$orig' should still exist"; return 1; }
+}
+
 @test "adopt_current_session is a no-op when @worktree-adopt-session=off" {
     local orig="adopt-disabled-session"
     tmux_run kill-session -t "$orig" 2>/dev/null || true

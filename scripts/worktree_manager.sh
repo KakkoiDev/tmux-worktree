@@ -752,6 +752,22 @@ _worktree_vars() {
     _WT_PATH="$WORKTREE_BASE/$project_name/$branch"
 }
 
+# tmux after-new-session hook entry point. Called once per new session with
+# the session name and its default-path. Cds into the path so git resolves
+# correctly, then delegates to adopt_current_session.
+adopt_session_hook() {
+    local session_name="$1"
+    local session_path="$2"
+
+    [ -z "$session_name" ] && return 0
+    if [ -n "$session_path" ] && [ -d "$session_path" ]; then
+        cd "$session_path" || return 0
+    fi
+
+    debug_log "adopt_session_hook: session='$session_name' path='$session_path'"
+    adopt_current_session "$session_name"
+}
+
 # Rename the calling session to "<project>-<branch>" when it predates the
 # plugin (e.g. user started tmux manually before invoking the menu).
 # Optional arg overrides the queried session name (used by tests).
@@ -771,7 +787,7 @@ adopt_current_session() {
     [ -z "$current_name" ] && return 0
 
     local branch
-    branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+    branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)
     if [ -z "$branch" ] || [ "$branch" = "HEAD" ]; then
         debug_log "adopt_current_session: detached or no branch, skipping (current='$current_name')"
         return 0
@@ -1376,6 +1392,7 @@ main() {
         "add_worktree") add_worktree "$2" "$3" ;;
         "switch_worktree") switch_worktree "$2" "$3" ;;
         "create_new_worktree") create_new_worktree "$2" ;;
+        "adopt_session_hook") adopt_session_hook "$2" "$3" ;;
         "fetch_remote_branches") fetch_remote_branches ;;
         "show_options_menu") show_options_menu ;;
         "show_bulk_remove_preview_menu") show_bulk_remove_preview_menu "$2" "$3" "$4" ;;

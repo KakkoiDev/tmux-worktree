@@ -44,4 +44,17 @@ if [ -n "$TMUX" ] || [ -n "$TMUX_SOCKET" ]; then
     else
         tmux bind-key "$KEYBINDING" run-shell "tmux display-message 'Opening...' ; $SCRIPTS_DIR/worktree_manager.sh tmux_worktrees_main"
     fi
+
+    # Register after-new-session hook to adopt host sessions into the plugin's
+    # naming convention. Plugin-created sessions already match the convention
+    # so the hook is a no-op for them. Append (-a) so we don't clobber other
+    # user hooks; opt-out via @worktree-adopt-session=off.
+    if [ "${ADOPT_SESSION:-on}" != "off" ]; then
+        hook_cmd="run-shell \"$SCRIPTS_DIR/worktree_manager.sh adopt_session_hook '#{session_name}' '#{session_path}'\""
+        if [ -n "$TMUX_SOCKET" ]; then
+            tmux -L "$TMUX_SOCKET" set-hook -ag after-new-session "$hook_cmd"
+        else
+            tmux set-hook -ag after-new-session "$hook_cmd"
+        fi
+    fi
 fi
