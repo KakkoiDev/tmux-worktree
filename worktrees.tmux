@@ -56,5 +56,16 @@ if [ -n "$TMUX" ] || [ -n "$TMUX_SOCKET" ]; then
         else
             tmux set-hook -ag after-new-session "$hook_cmd"
         fi
+
+        # Sweep existing sessions once at plugin load: the after-new-session
+        # hook only fires for future sessions, so any session created before
+        # the plugin was installed/reloaded keeps its default name otherwise.
+        tmux_bin="tmux"
+        [ -n "$TMUX_SOCKET" ] && tmux_bin="tmux -L $TMUX_SOCKET"
+        $tmux_bin list-sessions -F '#{session_name}|#{session_path}' 2>/dev/null \
+            | while IFS='|' read -r _name _path; do
+                [ -z "$_name" ] && continue
+                "$SCRIPTS_DIR/worktree_manager.sh" adopt_session_hook "$_name" "$_path" >/dev/null 2>&1 || true
+            done
     fi
 fi
