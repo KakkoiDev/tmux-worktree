@@ -224,7 +224,7 @@ teardown() {
 # ==============================================================================
 
 @test "list menu shows Recent toggle when sort_recent=0" {
-    show_worktree_menu 1
+    show_worktree_menu 1 "" 0
     assert_contains "$CAPTURED_MENU_OPTIONS" '"Recent" "r"'
 }
 
@@ -239,12 +239,12 @@ teardown() {
 }
 
 @test "list menu title normal when sort_recent=0" {
-    show_worktree_menu 1
+    show_worktree_menu 1 "" 0
     refute_contains "$CAPTURED_MENU_TITLE" "[Recent]"
 }
 
 @test "list menu Recent toggle dispatches with sort_recent=1" {
-    show_worktree_menu 1
+    show_worktree_menu 1 "" 0
     assert_contains "$CAPTURED_MENU_OPTIONS" "show_worktree_menu 1 '' 1"
 }
 
@@ -331,6 +331,60 @@ teardown() {
     git worktree remove --force "$wt_dir/feature-one" 2>/dev/null || true
     git worktree remove --force "$wt_dir/bugfix-123" 2>/dev/null || true
     rm -rf "$wt_dir"
+}
+
+# ==============================================================================
+# LIST MENU - SORT_RECENT_DEFAULT OPTION
+# ==============================================================================
+
+@test "list menu defaults to recent-first when SORT_RECENT_DEFAULT=on" {
+    SORT_RECENT_DEFAULT="on"
+    show_worktree_menu 1
+    assert_contains "$CAPTURED_MENU_TITLE" "[Recent]"
+    assert_contains "$CAPTURED_MENU_OPTIONS" '"Default" "r"'
+}
+
+@test "list menu defaults to git order when SORT_RECENT_DEFAULT=off" {
+    SORT_RECENT_DEFAULT="off"
+    show_worktree_menu 1
+    refute_contains "$CAPTURED_MENU_TITLE" "[Recent]"
+    assert_contains "$CAPTURED_MENU_OPTIONS" '"Recent" "r"'
+}
+
+@test "list menu defaults to recent-first when SORT_RECENT_DEFAULT unset" {
+    unset SORT_RECENT_DEFAULT
+    show_worktree_menu 1
+    assert_contains "$CAPTURED_MENU_TITLE" "[Recent]"
+}
+
+@test "list menu default order puts most recently accessed first" {
+    local wt_dir="${BATS_TMPDIR}/worktrees-$$"
+    mkdir -p "$wt_dir"
+    git worktree add -q "$wt_dir/feature-one" feature-one
+    git worktree add -q "$wt_dir/bugfix-123" bugfix-123
+
+    local project_name
+    project_name=$(get_project_name)
+    record_recent_branch "$project_name" "feature-one"
+    record_recent_branch "$project_name" "bugfix-123"
+
+    SORT_RECENT_DEFAULT="on"
+    show_worktree_menu 1
+
+    local bugfix_pos feature_pos
+    bugfix_pos=$(echo "$CAPTURED_MENU_OPTIONS" | grep -bo "bugfix-123" | head -1 | cut -d: -f1)
+    feature_pos=$(echo "$CAPTURED_MENU_OPTIONS" | grep -bo "feature-one" | head -1 | cut -d: -f1)
+    [ "$bugfix_pos" -lt "$feature_pos" ]
+
+    git worktree remove --force "$wt_dir/feature-one" 2>/dev/null || true
+    git worktree remove --force "$wt_dir/bugfix-123" 2>/dev/null || true
+    rm -rf "$wt_dir"
+}
+
+@test "explicit sort_recent=0 overrides SORT_RECENT_DEFAULT=on" {
+    SORT_RECENT_DEFAULT="on"
+    show_worktree_menu 1 "" 0
+    refute_contains "$CAPTURED_MENU_TITLE" "[Recent]"
 }
 
 # ==============================================================================

@@ -177,6 +177,7 @@ _load_config_from_tmux() {
     FETCH_PRUNE=$(get_tmux_option "@worktree-fetch-prune" "off")
     COPY_IGNORED=$(get_tmux_option "@worktree-copy-ignored" "off")
     ADOPT_SESSION=$(get_tmux_option "@worktree-adopt-session" "on")
+    SORT_RECENT_DEFAULT=$(get_tmux_option "@worktree-sort-recent-default" "on")
 
     local age_raw
     age_raw=$(get_tmux_option "@worktree-max-age-days" "30")
@@ -239,6 +240,7 @@ COPY_IGNORED='$COPY_IGNORED'
 ADOPT_SESSION='$ADOPT_SESSION'
 MAX_AGE_DAYS='$MAX_AGE_DAYS'
 MAX_AGE_CHOICES='$MAX_AGE_CHOICES'
+SORT_RECENT_DEFAULT='$SORT_RECENT_DEFAULT'
 CACHE
 }
 
@@ -323,7 +325,7 @@ load_config() {
     export WORKTREE_BASE ITEMS_PER_PAGE FETCH_TIMEOUT FETCH_PRUNE KEYBINDING DEBUG
     export KEY_LIST KEY_ADD KEY_REMOVE
     export KEY_NEXT KEY_PREV KEY_FILTER KEY_CLEAR_FILTER KEY_FETCH KEY_BACK KEY_QUIT KEY_NEW
-    export KEY_OPTIONS COPY_IGNORED MAX_AGE_DAYS MAX_AGE_CHOICES
+    export KEY_OPTIONS COPY_IGNORED MAX_AGE_DAYS MAX_AGE_CHOICES SORT_RECENT_DEFAULT
 
     # Load project config (overrides non-explicit options)
     _load_project_config

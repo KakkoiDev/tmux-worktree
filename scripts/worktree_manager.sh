@@ -570,7 +570,14 @@ show_worktree_menu() {
     page=$(validate_page "${1:-1}")
     local filter
     filter=$(limit_filter "${2:-}")
-    local sort_recent=${3:-0}
+    local sort_recent="${3:-}"
+    if [ -z "$sort_recent" ]; then
+        if [ "${SORT_RECENT_DEFAULT:-on}" = "on" ]; then
+            sort_recent=1
+        else
+            sort_recent=0
+        fi
+    fi
     local script_path="$SCRIPT_DIR/worktree_manager.sh"
 
     # Single combined call for count + data (performance optimization)
@@ -1277,12 +1284,13 @@ show_options_menu() {
     local script_path="$SCRIPT_DIR/worktree_manager.sh"
 
     # Compute next values for toggles and cycles
-    local next_copy_ignored next_debug next_items next_timeout next_fetch_prune next_age
+    local next_copy_ignored next_debug next_items next_timeout next_fetch_prune next_age next_sort_recent
     next_copy_ignored=$(_cycle_value "$COPY_IGNORED" "off" "on")
     next_debug=$(_cycle_value "$DEBUG" "off" "on")
     next_items=$(_cycle_value "$ITEMS_PER_PAGE" "10" "15" "20" "25")
     next_timeout=$(_cycle_value "$FETCH_TIMEOUT" "15" "30" "60" "120")
     next_fetch_prune=$(_cycle_value "$FETCH_PRUNE" "off" "on")
+    next_sort_recent=$(_cycle_value "${SORT_RECENT_DEFAULT:-on}" "off" "on")
 
     # Parse MAX_AGE_CHOICES into an array for cycling.
     local _age_choices_str="${MAX_AGE_CHOICES:-7,30,90}"
@@ -1304,6 +1312,7 @@ show_options_menu() {
     options="\"Copy ignored: $COPY_IGNORED\" \"\" \"run-shell \\\"'$script_path' set_option @worktree-copy-ignored $next_copy_ignored\\\"\" "
     options="$options\"Debug: $DEBUG\" \"\" \"run-shell \\\"'$script_path' set_option @worktree-debug $next_debug\\\"\" "
     options="$options\"Items/page: $ITEMS_PER_PAGE\" \"\" \"run-shell \\\"'$script_path' set_option @worktree-items-per-page $next_items\\\"\" "
+    options="$options\"Sort recent: ${SORT_RECENT_DEFAULT:-on}\" \"\" \"run-shell \\\"'$script_path' set_option @worktree-sort-recent-default $next_sort_recent\\\"\" "
     options="$options\"Fetch prune: $FETCH_PRUNE\" \"\" \"run-shell \\\"'$script_path' set_option @worktree-fetch-prune $next_fetch_prune\\\"\" "
     options="$options\"Fetch timeout: ${FETCH_TIMEOUT}s\" \"\" \"run-shell \\\"'$script_path' set_option @worktree-fetch-timeout $next_timeout\\\"\" "
     options="$options\"Stale after: ${MAX_AGE_DAYS}d\" \"\" \"run-shell \\\"'$script_path' set_option @worktree-max-age-days $next_age\\\"\" "

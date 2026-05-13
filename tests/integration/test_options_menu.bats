@@ -117,6 +117,11 @@ teardown() {
     assert_contains "$CAPTURED_MENU_OPTIONS" 'Back'
 }
 
+@test "options menu generates Sort recent option" {
+    show_options_menu
+    assert_contains "$CAPTURED_MENU_OPTIONS" '"Sort recent:'
+}
+
 # ==============================================================================
 # OPTIONS MENU DISPLAY VALUES
 # ==============================================================================
@@ -143,6 +148,30 @@ teardown() {
     tmux_set_option "@worktree-fetch-timeout" "60"
     show_options_menu
     assert_contains "$CAPTURED_MENU_OPTIONS" 'Fetch timeout: 60s'
+}
+
+@test "options menu shows current SORT_RECENT_DEFAULT value (on)" {
+    tmux_set_option "@worktree-sort-recent-default" "on"
+    show_options_menu
+    assert_contains "$CAPTURED_MENU_OPTIONS" 'Sort recent: on'
+}
+
+@test "options menu shows current SORT_RECENT_DEFAULT value (off)" {
+    tmux_set_option "@worktree-sort-recent-default" "off"
+    show_options_menu
+    assert_contains "$CAPTURED_MENU_OPTIONS" 'Sort recent: off'
+}
+
+@test "options menu Sort recent toggle cycles on to off" {
+    tmux_set_option "@worktree-sort-recent-default" "on"
+    show_options_menu
+    assert_contains "$CAPTURED_MENU_OPTIONS" 'set_option @worktree-sort-recent-default off'
+}
+
+@test "options menu Sort recent toggle cycles off to on" {
+    tmux_set_option "@worktree-sort-recent-default" "off"
+    show_options_menu
+    assert_contains "$CAPTURED_MENU_OPTIONS" 'set_option @worktree-sort-recent-default on'
 }
 
 # ==============================================================================
