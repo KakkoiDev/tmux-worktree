@@ -262,6 +262,7 @@ get_worktree_data() {
             -f "$SCRIPT_DIR/awk/worktree_data.awk"
     else
         LC_ALL=C git worktree list --porcelain | LC_ALL=C awk \
+            -f "$SCRIPT_DIR/awk/worktree_sort_alpha.awk" | LC_ALL=C awk \
             -v project="$project_name" \
             -v filter="$regex_filter" \
             -v items_per_page="$ITEMS_PER_PAGE" \
@@ -595,15 +596,19 @@ show_worktree_menu() {
 
     # Build title with state indicators
     local title="Worktrees (Page $page/$total_pages)"
-    [ "$sort_recent" = "1" ] && title="$title [Recent]"
+    if [ "$sort_recent" = "1" ]; then
+        title="$title [Latest first]"
+    else
+        title="$title [Alphabetical]"
+    fi
     [ -n "$filter" ] && title="$title - Filter: '$filter'"
 
-    # Recent sort toggle
+    # Sort toggle: label shows the mode you'll switch TO
     local recent_option=""
     if [ "$sort_recent" = "1" ]; then
-        recent_option="\"Default\" \"r\" \"run-shell \\\"'$script_path' show_worktree_menu 1 '$filter' 0\\\"\" "
+        recent_option="\"Alphabetical\" \"r\" \"run-shell \\\"'$script_path' show_worktree_menu 1 '$filter' 0\\\"\" "
     else
-        recent_option="\"Recent\" \"r\" \"run-shell \\\"'$script_path' show_worktree_menu 1 '$filter' 1\\\"\" "
+        recent_option="\"Latest first\" \"r\" \"run-shell \\\"'$script_path' show_worktree_menu 1 '$filter' 1\\\"\" "
     fi
 
     # Filter option (preserves sort_recent state)

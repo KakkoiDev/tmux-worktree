@@ -223,32 +223,32 @@ teardown() {
 # LIST MENU - SORT_RECENT TOGGLE
 # ==============================================================================
 
-@test "list menu shows Recent toggle when sort_recent=0" {
+@test "list menu shows Latest first toggle when sort_recent=0" {
     show_worktree_menu 1 "" 0
-    assert_contains "$CAPTURED_MENU_OPTIONS" '"Recent" "r"'
+    assert_contains "$CAPTURED_MENU_OPTIONS" '"Latest first" "r"'
 }
 
-@test "list menu shows Default toggle when sort_recent=1" {
+@test "list menu shows Alphabetical toggle when sort_recent=1" {
     show_worktree_menu 1 "" 1
-    assert_contains "$CAPTURED_MENU_OPTIONS" '"Default" "r"'
+    assert_contains "$CAPTURED_MENU_OPTIONS" '"Alphabetical" "r"'
 }
 
-@test "list menu title shows [Recent] when sort_recent=1" {
+@test "list menu title shows [Latest first] when sort_recent=1" {
     show_worktree_menu 1 "" 1
-    assert_contains "$CAPTURED_MENU_TITLE" "[Recent]"
+    assert_contains "$CAPTURED_MENU_TITLE" "[Latest first]"
 }
 
-@test "list menu title normal when sort_recent=0" {
+@test "list menu title shows [Alphabetical] when sort_recent=0" {
     show_worktree_menu 1 "" 0
-    refute_contains "$CAPTURED_MENU_TITLE" "[Recent]"
+    assert_contains "$CAPTURED_MENU_TITLE" "[Alphabetical]"
 }
 
-@test "list menu Recent toggle dispatches with sort_recent=1" {
+@test "list menu Latest first toggle dispatches with sort_recent=1" {
     show_worktree_menu 1 "" 0
     assert_contains "$CAPTURED_MENU_OPTIONS" "show_worktree_menu 1 '' 1"
 }
 
-@test "list menu Default toggle dispatches with sort_recent=0" {
+@test "list menu Alphabetical toggle dispatches with sort_recent=0" {
     show_worktree_menu 1 "" 1
     assert_contains "$CAPTURED_MENU_OPTIONS" "show_worktree_menu 1 '' 0"
 }
@@ -321,7 +321,7 @@ teardown() {
     project_name=$(get_project_name)
     record_recent_branch "$project_name" "bugfix-123"
 
-    # sort_recent=0 should use normal git order
+    # sort_recent=0 should use alphabetical order, ignoring recent log
     show_worktree_menu 1 "" 0
 
     # Both should appear
@@ -333,6 +333,50 @@ teardown() {
     rm -rf "$wt_dir"
 }
 
+@test "list menu sort_recent=0 sorts branches alphabetically" {
+    local wt_dir="${BATS_TMPDIR}/worktrees-$$"
+    mkdir -p "$wt_dir"
+    # Create branches in non-alphabetical order
+    git worktree add -q "$wt_dir/zebra" -b zebra
+    git worktree add -q "$wt_dir/alpha" -b alpha
+    git worktree add -q "$wt_dir/mango" -b mango
+
+    show_worktree_menu 1 "" 0
+
+    # In CAPTURED_MENU_OPTIONS, alpha should appear before mango before zebra
+    local alpha_pos mango_pos zebra_pos
+    alpha_pos=$(echo "$CAPTURED_MENU_OPTIONS" | grep -bo '"alpha"' | head -1 | cut -d: -f1)
+    mango_pos=$(echo "$CAPTURED_MENU_OPTIONS" | grep -bo '"mango"' | head -1 | cut -d: -f1)
+    zebra_pos=$(echo "$CAPTURED_MENU_OPTIONS" | grep -bo '"zebra"' | head -1 | cut -d: -f1)
+    [ "$alpha_pos" -lt "$mango_pos" ]
+    [ "$mango_pos" -lt "$zebra_pos" ]
+
+    git worktree remove --force "$wt_dir/alpha" 2>/dev/null || true
+    git worktree remove --force "$wt_dir/mango" 2>/dev/null || true
+    git worktree remove --force "$wt_dir/zebra" 2>/dev/null || true
+    git branch -D alpha mango zebra 2>/dev/null || true
+    rm -rf "$wt_dir"
+}
+
+@test "list menu alphabetical sort is case-insensitive" {
+    local wt_dir="${BATS_TMPDIR}/worktrees-$$"
+    mkdir -p "$wt_dir"
+    git worktree add -q "$wt_dir/Banana" -b Banana
+    git worktree add -q "$wt_dir/apple" -b apple
+
+    show_worktree_menu 1 "" 0
+
+    local apple_pos banana_pos
+    apple_pos=$(echo "$CAPTURED_MENU_OPTIONS" | grep -bo '"apple"' | head -1 | cut -d: -f1)
+    banana_pos=$(echo "$CAPTURED_MENU_OPTIONS" | grep -bo '"Banana"' | head -1 | cut -d: -f1)
+    [ "$apple_pos" -lt "$banana_pos" ]
+
+    git worktree remove --force "$wt_dir/Banana" 2>/dev/null || true
+    git worktree remove --force "$wt_dir/apple" 2>/dev/null || true
+    git branch -D apple Banana 2>/dev/null || true
+    rm -rf "$wt_dir"
+}
+
 # ==============================================================================
 # LIST MENU - SORT_RECENT_DEFAULT OPTION
 # ==============================================================================
@@ -340,21 +384,21 @@ teardown() {
 @test "list menu defaults to recent-first when SORT_RECENT_DEFAULT=on" {
     SORT_RECENT_DEFAULT="on"
     show_worktree_menu 1
-    assert_contains "$CAPTURED_MENU_TITLE" "[Recent]"
-    assert_contains "$CAPTURED_MENU_OPTIONS" '"Default" "r"'
+    assert_contains "$CAPTURED_MENU_TITLE" "[Latest first]"
+    assert_contains "$CAPTURED_MENU_OPTIONS" '"Alphabetical" "r"'
 }
 
-@test "list menu defaults to git order when SORT_RECENT_DEFAULT=off" {
+@test "list menu defaults to alphabetical when SORT_RECENT_DEFAULT=off" {
     SORT_RECENT_DEFAULT="off"
     show_worktree_menu 1
-    refute_contains "$CAPTURED_MENU_TITLE" "[Recent]"
-    assert_contains "$CAPTURED_MENU_OPTIONS" '"Recent" "r"'
+    assert_contains "$CAPTURED_MENU_TITLE" "[Alphabetical]"
+    assert_contains "$CAPTURED_MENU_OPTIONS" '"Latest first" "r"'
 }
 
 @test "list menu defaults to recent-first when SORT_RECENT_DEFAULT unset" {
     unset SORT_RECENT_DEFAULT
     show_worktree_menu 1
-    assert_contains "$CAPTURED_MENU_TITLE" "[Recent]"
+    assert_contains "$CAPTURED_MENU_TITLE" "[Latest first]"
 }
 
 @test "list menu default order puts most recently accessed first" {
@@ -384,7 +428,8 @@ teardown() {
 @test "explicit sort_recent=0 overrides SORT_RECENT_DEFAULT=on" {
     SORT_RECENT_DEFAULT="on"
     show_worktree_menu 1 "" 0
-    refute_contains "$CAPTURED_MENU_TITLE" "[Recent]"
+    refute_contains "$CAPTURED_MENU_TITLE" "[Latest first]"
+    assert_contains "$CAPTURED_MENU_TITLE" "[Alphabetical]"
 }
 
 # ==============================================================================
