@@ -830,26 +830,33 @@ _adopt_canonical_name() {
     [ "$has_orig" -ne 0 ] || { echo "Original session '$orig' should be gone"; return 1; }
 }
 
-@test "adopt_session_hook is a no-op when session_path is outside any git repo" {
-    local orig="adopt-hook-nogit"
-    local non_git_dir="/tmp/adopt-hook-nogit-$$"
+@test "adopt_session_hook renames default-named session to dir basename outside git repo" {
+    local orig="window"
+    local non_git_dir="/tmp/nongit-hook-$$"
+    local expected
+    expected=$(basename "$non_git_dir")
     mkdir -p "$non_git_dir"
 
     run tmux_run has-session -t "$orig"
     if [ "$status" -eq 0 ]; then tmux_run kill-session -t "$orig"; fi
+    run tmux_run has-session -t "$expected"
+    if [ "$status" -eq 0 ]; then tmux_run kill-session -t "$expected"; fi
     run tmux_run new-session -d -s "$orig" -c "$non_git_dir"
     [ "$status" -eq 0 ] || skip "could not create session"
 
     adopt_session_hook "$orig" "$non_git_dir"
 
+    run tmux_run has-session -t "$expected"
+    local has_expected="$status"
     run tmux_run has-session -t "$orig"
     local has_orig="$status"
 
-    run tmux_run has-session -t "$orig"
-    if [ "$status" -eq 0 ]; then tmux_run kill-session -t "$orig"; fi
+    tmux_run kill-session -t "$expected" 2>/dev/null || true
+    tmux_run kill-session -t "$orig" 2>/dev/null || true
     rm -rf "$non_git_dir"
 
-    [ "$has_orig" -eq 0 ] || { echo "Non-git session '$orig' should still exist"; return 1; }
+    [ "$has_expected" -eq 0 ] || { echo "Expected session '$expected' to exist after non-git adoption"; return 1; }
+    [ "$has_orig" -ne 0 ] || { echo "Original session '$orig' should have been renamed"; return 1; }
 }
 
 @test "adopt_current_session is a no-op when @worktree-adopt-session=off" {
@@ -873,4 +880,199 @@ _adopt_canonical_name() {
 
     [ "$has_orig" -eq 0 ] || { echo "Original session '$orig' should still exist"; return 1; }
     [ "$has_canonical" -ne 0 ] || { echo "Canonical '$canonical' should NOT have been created"; return 1; }
+}
+
+# ==============================================================================
+# NON-GIT ADOPTION (regression: sessions opened outside a git repo)
+# ==============================================================================
+# Regression for the "window" bug: when tmux starts in a non-git directory the
+# hook used to early-return on the failed `git rev-parse`, leaving the default
+# session name in place. Now the directory basename is used as the canonical
+# name and the same exact-match / prefix-skip rules apply.
+
+@test "adopt_current_session renames 'window' to dir basename in non-git dir" {
+    local dir base orig="window"
+    dir=$(mktemp -d "${BATS_TMPDIR}/nongit-window-XXXXXX")
+    base=$(basename "$dir")
+
+    tmux_run kill-session -t "$orig" 2>/dev/null || true
+    tmux_run kill-session -t "$base" 2>/dev/null || true
+    tmux_run new-session -d -s "$orig" -c "$dir"
+
+    pushd "$dir" >/dev/null
+    adopt_current_session "$orig"
+    popd >/dev/null
+
+    run tmux_run has-session -t "$base"
+    local has_expected="$status"
+    run tmux_run has-session -t "$orig"
+    local has_orig="$status"
+
+    tmux_run kill-session -t "$base" 2>/dev/null || true
+    tmux_run kill-session -t "$orig" 2>/dev/null || true
+    rm -rf "$dir"
+
+    [ "$has_expected" -eq 0 ] || { echo "Expected '$base' to exist after rename"; return 1; }
+    [ "$has_orig" -ne 0 ] || { echo "'$orig' should have been renamed away"; return 1; }
+}
+
+@test "adopt_current_session renames numeric default ('0') to dir basename in non-git dir" {
+    local dir base orig="0"
+    dir=$(mktemp -d "${BATS_TMPDIR}/nongit-zero-XXXXXX")
+    base=$(basename "$dir")
+
+    tmux_run kill-session -t "$orig" 2>/dev/null || true
+    tmux_run kill-session -t "$base" 2>/dev/null || true
+    tmux_run new-session -d -s "$orig" -c "$dir"
+
+    pushd "$dir" >/dev/null
+    adopt_current_session "$orig"
+    popd >/dev/null
+
+    run tmux_run has-session -t "$base"
+    local has_expected="$status"
+
+    tmux_run kill-session -t "$base" 2>/dev/null || true
+    tmux_run kill-session -t "$orig" 2>/dev/null || true
+    rm -rf "$dir"
+
+    [ "$has_expected" -eq 0 ] || { echo "Expected '$base' to exist after numeric default rename"; return 1; }
+}
+
+@test "adopt_current_session leaves already-basename session alone in non-git dir" {
+    local dir base
+    dir=$(mktemp -d "${BATS_TMPDIR}/nongit-keep-XXXXXX")
+    base=$(basename "$dir")
+
+    tmux_run kill-session -t "$base" 2>/dev/null || true
+    tmux_run new-session -d -s "$base" -c "$dir"
+
+    pushd "$dir" >/dev/null
+    adopt_current_session "$base"
+    popd >/dev/null
+
+    run tmux_run has-session -t "$base"
+    local has_expected="$status"
+
+    tmux_run kill-session -t "$base" 2>/dev/null || true
+    rm -rf "$dir"
+
+    [ "$has_expected" -eq 0 ] || { echo "Session '$base' should still exist (exact match skip)"; return 1; }
+}
+
+@test "adopt_current_session leaves '<basename>-suffix' session alone in non-git dir" {
+    local dir base prefixed
+    dir=$(mktemp -d "${BATS_TMPDIR}/nongit-prefix-XXXXXX")
+    base=$(basename "$dir")
+    prefixed="${base}-feature"
+
+    tmux_run kill-session -t "$prefixed" 2>/dev/null || true
+    tmux_run kill-session -t "$base" 2>/dev/null || true
+    tmux_run new-session -d -s "$prefixed" -c "$dir"
+
+    pushd "$dir" >/dev/null
+    adopt_current_session "$prefixed"
+    popd >/dev/null
+
+    # Use "=NAME" for EXACT tmux target match (default is prefix-match, which
+    # would let "has-session -t $base" succeed against "${base}-feature").
+    run tmux_run has-session -t "=$prefixed"
+    local has_prefixed="$status"
+    run tmux_run has-session -t "=$base"
+    local has_bare="$status"
+
+    tmux_run kill-session -t "=$prefixed" 2>/dev/null || true
+    tmux_run kill-session -t "=$base" 2>/dev/null || true
+    rm -rf "$dir"
+
+    [ "$has_prefixed" -eq 0 ] || { echo "Prefixed session '$prefixed' should still exist"; return 1; }
+    [ "$has_bare" -ne 0 ] || { echo "Bare '$base' session should NOT have been created"; return 1; }
+}
+
+@test "adopt_current_session sanitizes dots in non-git basename" {
+    # tmux disallows '.' in session names; the production code substitutes _.
+    local parent dir base sanitized orig="window"
+    parent=$(mktemp -d "${BATS_TMPDIR}/nongit-dotparent.XXXXXX")
+    dir="$parent/foo.bar.baz"
+    mkdir -p "$dir"
+    base=$(basename "$dir")            # foo.bar.baz
+    sanitized="${base//./_}"           # foo_bar_baz
+
+    tmux_run kill-session -t "$orig" 2>/dev/null || true
+    tmux_run kill-session -t "$sanitized" 2>/dev/null || true
+    tmux_run new-session -d -s "$orig" -c "$dir"
+
+    pushd "$dir" >/dev/null
+    adopt_current_session "$orig"
+    popd >/dev/null
+
+    run tmux_run has-session -t "$sanitized"
+    local has_expected="$status"
+
+    tmux_run kill-session -t "$sanitized" 2>/dev/null || true
+    tmux_run kill-session -t "$orig" 2>/dev/null || true
+    rm -rf "$parent"
+
+    [ "$has_expected" -eq 0 ] || { echo "Expected sanitized session '$sanitized' to exist"; return 1; }
+}
+
+@test "adopt_current_session sets project env var but not branch/path env in non-git dir" {
+    local dir base orig="window"
+    dir=$(mktemp -d "${BATS_TMPDIR}/nongit-env-XXXXXX")
+    base=$(basename "$dir")
+
+    tmux_run kill-session -t "$orig" 2>/dev/null || true
+    tmux_run kill-session -t "$base" 2>/dev/null || true
+    tmux_run new-session -d -s "$orig" -c "$dir"
+
+    pushd "$dir" >/dev/null
+    adopt_current_session "$orig"
+    popd >/dev/null
+
+    run tmux_run show-environment -t "$base" TMUX_WORKTREE
+    local flag_status="$status" flag_output="$output"
+    run tmux_run show-environment -t "$base" TMUX_WORKTREE_PROJECT
+    local proj_status="$status" proj_output="$output"
+    run tmux_run show-environment -t "$base" TMUX_WORKTREE_BRANCH
+    local branch_status="$status"
+    run tmux_run show-environment -t "$base" TMUX_WORKTREE_PATH
+    local path_status="$status"
+
+    tmux_run kill-session -t "$base" 2>/dev/null || true
+    tmux_run kill-session -t "$orig" 2>/dev/null || true
+    rm -rf "$dir"
+
+    [ "$flag_status" -eq 0 ] || { echo "TMUX_WORKTREE not set"; return 1; }
+    [[ "$flag_output" == "TMUX_WORKTREE=1" ]] || { echo "Unexpected flag value: $flag_output"; return 1; }
+    [ "$proj_status" -eq 0 ] || { echo "TMUX_WORKTREE_PROJECT not set"; return 1; }
+    [[ "$proj_output" == "TMUX_WORKTREE_PROJECT=$base" ]] || { echo "Unexpected project value: $proj_output"; return 1; }
+    # Branch and path must NOT be set for non-git sessions
+    [ "$branch_status" -ne 0 ] || { echo "TMUX_WORKTREE_BRANCH should NOT be set in non-git dir"; return 1; }
+    [ "$path_status" -ne 0 ] || { echo "TMUX_WORKTREE_PATH should NOT be set in non-git dir"; return 1; }
+}
+
+@test "adopt_current_session is a no-op in non-git dir when @worktree-adopt-session=off" {
+    local dir base orig="window"
+    dir=$(mktemp -d "${BATS_TMPDIR}/nongit-off-XXXXXX")
+    base=$(basename "$dir")
+
+    tmux_run kill-session -t "$orig" 2>/dev/null || true
+    tmux_run kill-session -t "$base" 2>/dev/null || true
+    tmux_run new-session -d -s "$orig" -c "$dir"
+
+    pushd "$dir" >/dev/null
+    ADOPT_SESSION=off adopt_current_session "$orig"
+    popd >/dev/null
+
+    run tmux_run has-session -t "$orig"
+    local has_orig="$status"
+    run tmux_run has-session -t "$base"
+    local has_base="$status"
+
+    tmux_run kill-session -t "$orig" 2>/dev/null || true
+    tmux_run kill-session -t "$base" 2>/dev/null || true
+    rm -rf "$dir"
+
+    [ "$has_orig" -eq 0 ] || { echo "Original session '$orig' should still exist when adopt is off"; return 1; }
+    [ "$has_base" -ne 0 ] || { echo "Basename session '$base' should NOT have been created"; return 1; }
 }

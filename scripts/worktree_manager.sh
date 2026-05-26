@@ -780,15 +780,16 @@ adopt_session_hook() {
     adopt_current_session "$session_name"
 }
 
-# Rename the calling session to "<project>-<branch>" when it predates the
-# plugin (e.g. user started tmux manually before invoking the menu).
+# Rename the calling session to "<project>-<branch>" when inside a git work tree,
+# or to "<dir-basename>" when outside one (so sessions opened in non-git dirs no
+# longer keep tmux's default "window"/"0" name).
 # Optional arg overrides the queried session name (used by tests).
 # Skipped when:
 #   - @worktree-adopt-session option is "off"
 #   - tmux query returns empty (no tmux / no current session)
-#   - HEAD is detached (no canonical branch name)
-#   - current name already starts with "<project>-" (treated as already managed)
+#   - HEAD is detached inside a git repo (no canonical branch name)
 #   - current name already equals the canonical name
+#   - current name already starts with "<canonical>-" (treated as already managed)
 adopt_current_session() {
     [ "${ADOPT_SESSION:-on}" = "off" ] && return 0
 
@@ -800,39 +801,52 @@ adopt_current_session() {
 
     local branch
     branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)
+
+    local in_git=0
+    git rev-parse --is-inside-work-tree >/dev/null 2>&1 && in_git=1
+
     if [ -z "$branch" ] || [ "$branch" = "HEAD" ]; then
-        debug_log "adopt_current_session: detached or no branch, skipping (current='$current_name')"
-        return 0
+        if [ "$in_git" = "1" ]; then
+            debug_log "adopt_current_session: detached HEAD, skipping (current='$current_name')"
+            return 0
+        fi
+        # Not inside a git work tree: fall back to bare project name (dir basename).
+        branch=""
     fi
 
     local project
     project=$(get_project_name)
     [ -z "$project" ] && return 0
 
-    # Compute sanitized prefix used by get_session_name so the prefix check
-    # matches tmux-sanitized session names (e.g. "shared-repo_X-" not
-    # "shared-repo.X-" because tmux replaces "." with "_").
+    # Sanitized "<project>-" prefix (matches whatever get_session_name will emit,
+    # e.g. tmux replaces "." with "_"). Used for both the skip rule and as the
+    # bare-project fallback name (with the trailing "-" stripped).
     local sanitized_prefix
     sanitized_prefix=$(get_session_name "$project" "")
 
-    # Already plugin-managed (any session under this project's prefix) - leave alone
+    local expected
+    if [ -n "$branch" ]; then
+        expected=$(get_session_name "$project" "$branch")
+    else
+        expected="${sanitized_prefix%-}"
+    fi
+
+    # Already plugin-managed: exact match, or "<project>-..." (any branch under
+    # the same project, plugin-created or otherwise). Leave alone.
+    [ "$current_name" = "$expected" ] && return 0
     case "$current_name" in
         "$sanitized_prefix"*) debug_log "adopt_current_session: '$current_name' already has project prefix, skipping"; return 0 ;;
     esac
-
-    local expected
-    expected=$(get_session_name "$project" "$branch")
-    [ "$current_name" = "$expected" ] && return 0
 
     if tmux rename-session -t "$current_name" "$expected" 2>/dev/null; then
         debug_log "adopt_current_session: renamed '$current_name' -> '$expected'"
         # Propagate plugin env vars to the session so future panes/processes
         # see the same context as plugin-created sessions.
-        local worktree_path
-        worktree_path=$(git rev-parse --show-toplevel 2>/dev/null)
+        local worktree_path=""
+        [ "$in_git" = "1" ] && worktree_path=$(git rev-parse --show-toplevel 2>/dev/null)
         tmux setenv -t "$expected" TMUX_WORKTREE 1 2>/dev/null || true
         tmux setenv -t "$expected" TMUX_WORKTREE_PROJECT "$project" 2>/dev/null || true
-        tmux setenv -t "$expected" TMUX_WORKTREE_BRANCH "$branch" 2>/dev/null || true
+        [ -n "$branch" ] && tmux setenv -t "$expected" TMUX_WORKTREE_BRANCH "$branch" 2>/dev/null || true
         [ -n "$worktree_path" ] && tmux setenv -t "$expected" TMUX_WORKTREE_PATH "$worktree_path" 2>/dev/null || true
     else
         debug_log "adopt_current_session: rename failed '$current_name' -> '$expected'"
