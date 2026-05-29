@@ -850,6 +850,9 @@ adopt_current_session() {
         [ -n "$worktree_path" ] && tmux setenv -t "$expected" TMUX_WORKTREE_PATH "$worktree_path" 2>/dev/null || true
     else
         debug_log "adopt_current_session: rename failed '$current_name' -> '$expected'"
+        if tmux has-session -t "$expected" 2>/dev/null; then
+            tmux display-message "tmux-worktree: '$current_name' not renamed - '$expected' already exists"
+        fi
     fi
 }
 

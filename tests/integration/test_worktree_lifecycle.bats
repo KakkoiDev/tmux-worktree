@@ -801,6 +801,37 @@ _adopt_canonical_name() {
     [[ "$env_output" == "TMUX_WORKTREE=1" ]] || { echo "Unexpected env value: $env_output"; return 1; }
 }
 
+@test "adopt_current_session surfaces collision when target name is taken" {
+    local expected orig="4"
+    expected=$(_adopt_canonical_name master)
+    tmux_run kill-session -t "$orig" 2>/dev/null || true
+    tmux_run kill-session -t "$expected" 2>/dev/null || true
+
+    # Occupy the canonical name, then create the stray default-named session.
+    tmux_run new-session -d -s "$expected" -c "$TEST_REPO_DIR"
+    tmux_run new-session -d -s "$orig" -c "$TEST_REPO_DIR"
+
+    # Capture display-message; delegate every other call to the real test server
+    # so the rename attempt genuinely fails with a duplicate-session error.
+    local msg_log="$BATS_TEST_TMPDIR/display_msgs"
+    : > "$msg_log"
+    tmux() {
+        if [ "$1" = "display-message" ]; then shift; printf '%s\n' "$*" >> "$msg_log"; return 0; fi
+        tmux_run "$@"
+    }
+
+    adopt_current_session "$orig"
+    unset -f tmux
+
+    run tmux_run has-session -t "$orig"
+    local has_orig="$status"
+    tmux_run kill-session -t "$orig" 2>/dev/null || true
+    tmux_run kill-session -t "$expected" 2>/dev/null || true
+
+    [ "$has_orig" -eq 0 ] || { echo "stray session should NOT have been renamed on collision"; return 1; }
+    grep -q "$expected" "$msg_log" || { echo "no collision message emitted; log:"; cat "$msg_log"; return 1; }
+}
+
 @test "adopt_current_session is a no-op when tmux query returns empty" {
     # Explicit empty session name simulates "not in tmux"
     run adopt_current_session ""
