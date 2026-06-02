@@ -1107,3 +1107,99 @@ _adopt_canonical_name() {
     [ "$has_orig" -eq 0 ] || { echo "Original session '$orig' should still exist when adopt is off"; return 1; }
     [ "$has_base" -ne 0 ] || { echo "Basename session '$base' should NOT have been created"; return 1; }
 }
+
+# Regression: adoption must derive the project from the session's own directory,
+# never from an inherited TMUX_WORKTREE_PROJECT. The after-new-session hook and the
+# load-time sweep run in a child that can inherit a foreign TMUX_WORKTREE_PROJECT
+# from the invoking pane/session; honoring it mis-stamped unrelated sessions with
+# another project's name (every session ended up named "<that-project>-<branch>").
+
+@test "adopt_current_session ignores leaked TMUX_WORKTREE_PROJECT (git dir)" {
+    local expected wrong orig="adopt-leak-git-1"
+    expected=$(_adopt_canonical_name master)
+    wrong="foreign-leak-master"
+
+    tmux_run kill-session -t "$orig" 2>/dev/null || true
+    tmux_run kill-session -t "$expected" 2>/dev/null || true
+    tmux_run kill-session -t "$wrong" 2>/dev/null || true
+
+    tmux_run new-session -d -s "$orig" -c "$TEST_REPO_DIR"
+
+    # Simulate the hook/sweep child inheriting a foreign project name.
+    TMUX_WORKTREE_PROJECT=foreign-leak adopt_current_session "$orig"
+
+    run tmux_run has-session -t "$expected"
+    local has_expected="$status"
+    run tmux_run has-session -t "$wrong"
+    local has_wrong="$status"
+
+    tmux_run kill-session -t "$expected" 2>/dev/null || true
+    tmux_run kill-session -t "$wrong" 2>/dev/null || true
+    tmux_run kill-session -t "$orig" 2>/dev/null || true
+
+    [ "$has_expected" -eq 0 ] || { echo "Expected '$expected' (real project); session not renamed from its own dir"; return 1; }
+    [ "$has_wrong" -ne 0 ] || { echo "Session was named from leaked TMUX_WORKTREE_PROJECT ('$wrong')"; return 1; }
+}
+
+@test "adopt_current_session ignores leaked TMUX_WORKTREE_PROJECT (non-git dir)" {
+    local dir base orig="window"
+    dir=$(mktemp -d "${BATS_TMPDIR}/leak-nongit-XXXXXX")
+    base=$(basename "$dir")
+
+    tmux_run kill-session -t "$orig" 2>/dev/null || true
+    tmux_run kill-session -t "$base" 2>/dev/null || true
+    tmux_run kill-session -t "foreign-leak" 2>/dev/null || true
+
+    tmux_run new-session -d -s "$orig" -c "$dir"
+
+    pushd "$dir" >/dev/null
+    TMUX_WORKTREE_PROJECT=foreign-leak adopt_current_session "$orig"
+    popd >/dev/null
+
+    run tmux_run has-session -t "$base"
+    local has_expected="$status"
+    run tmux_run has-session -t "foreign-leak"
+    local has_wrong="$status"
+
+    tmux_run kill-session -t "$base" 2>/dev/null || true
+    tmux_run kill-session -t "foreign-leak" 2>/dev/null || true
+    tmux_run kill-session -t "$orig" 2>/dev/null || true
+    rm -rf "$dir"
+
+    [ "$has_expected" -eq 0 ] || { echo "Expected dir basename '$base'; session not renamed from its own dir"; return 1; }
+    [ "$has_wrong" -ne 0 ] || { echo "Session was named from leaked TMUX_WORKTREE_PROJECT ('foreign-leak')"; return 1; }
+}
+
+# Regression: the after-new-session hook must not adopt a session when it cannot
+# cd into that session's own directory. Otherwise it resolves the project from the
+# hook child's inherited CWD (a different session's directory) and mis-renames.
+@test "adopt_session_hook does not adopt when session path is missing or empty" {
+    # setup() leaves CWD at TEST_REPO_DIR (a git repo); the old code adopted using it.
+    local canonical orig1="adopt-nodir-1" orig2="adopt-nodir-2"
+    canonical=$(_adopt_canonical_name master)
+
+    tmux_run kill-session -t "$orig1" 2>/dev/null || true
+    tmux_run kill-session -t "$orig2" 2>/dev/null || true
+    tmux_run kill-session -t "$canonical" 2>/dev/null || true
+
+    tmux_run new-session -d -s "$orig1" -c "$TEST_REPO_DIR"
+    tmux_run new-session -d -s "$orig2" -c "$TEST_REPO_DIR"
+
+    adopt_session_hook "$orig1" "/nonexistent/path/xyz"
+    adopt_session_hook "$orig2" ""
+
+    run tmux_run has-session -t "$orig1"
+    local has1="$status"
+    run tmux_run has-session -t "$orig2"
+    local has2="$status"
+    run tmux_run has-session -t "$canonical"
+    local has_canonical="$status"
+
+    tmux_run kill-session -t "$orig1" 2>/dev/null || true
+    tmux_run kill-session -t "$orig2" 2>/dev/null || true
+    tmux_run kill-session -t "$canonical" 2>/dev/null || true
+
+    [ "$has1" -eq 0 ] || { echo "'$orig1' should be untouched when session path does not exist"; return 1; }
+    [ "$has2" -eq 0 ] || { echo "'$orig2' should be untouched when session path is empty"; return 1; }
+    [ "$has_canonical" -ne 0 ] || { echo "Hook adopted from the wrong CWD: '$canonical' should not have been created"; return 1; }
+}

@@ -772,9 +772,10 @@ adopt_session_hook() {
     local session_path="$2"
 
     [ -z "$session_name" ] && return 0
-    if [ -n "$session_path" ] && [ -d "$session_path" ]; then
-        cd "$session_path" || return 0
-    fi
+    # Without the session's own directory we cannot resolve its project; refuse
+    # rather than adopt using the hook child's inherited CWD (another session's).
+    [ -z "$session_path" ] && return 0
+    cd "$session_path" 2>/dev/null || return 0
 
     debug_log "adopt_session_hook: session='$session_name' path='$session_path'"
     adopt_current_session "$session_name"
@@ -815,7 +816,10 @@ adopt_current_session() {
     fi
 
     local project
-    project=$(get_project_name)
+    # Adoption must derive the project from this session's own directory, never
+    # from a TMUX_WORKTREE_PROJECT inherited by the hook/sweep child process
+    # (it leaks across unrelated sessions and mis-stamps every adopted name).
+    project=$(TMUX_WORKTREE_PROJECT= get_project_name)
     [ -z "$project" ] && return 0
 
     # Sanitized "<project>-" prefix (matches whatever get_session_name will emit,
