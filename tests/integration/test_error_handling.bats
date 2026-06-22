@@ -183,6 +183,47 @@ teardown() {
     [[ "$status" -ne 0 ]] || [[ -z "$output" ]] || [[ "$output" == *"error"* ]] || [[ "$output" == *"invalid"* ]] || true
 }
 
+@test "create_new_worktree strips a trailing slash from the branch name" {
+    local branch="feature/test-trailing"
+    local project
+    project=$(get_project_name)
+    local expected_path="$WORKTREE_BASE/$project/$branch"
+
+    # User typed a trailing slash; git would reject it raw, but it must be
+    # normalized away and the worktree created under the slash-free name.
+    (create_new_worktree "feature/test-trailing/") 2>/dev/null || true
+
+    run git branch --list "$branch"
+    assert_contains "$output" "$branch"
+    [ -d "$expected_path" ]
+
+    git worktree remove --force "$expected_path" 2>/dev/null || true
+    git branch -D "$branch" 2>/dev/null || true
+}
+
+@test "create_new_worktree rejects an invalid branch name with a clear message" {
+    # Capture status-bar messages on stdout (global stub suppresses them).
+    tmux() {
+        if [ "$1" = "display-message" ]; then
+            shift
+            echo "$*"
+        fi
+        return 0
+    }
+    export -f tmux
+
+    run create_new_worktree "bad~name"
+    assert_failure
+    assert_contains "$output" "Invalid branch name"
+    assert_not_contains "$output" "Preparing"
+}
+
+@test "_git_error_summary surfaces the fatal line, not the progress line" {
+    run _git_error_summary $'Preparing worktree (new branch x)\nfatal: invalid reference: x'
+    assert_contains "$output" "fatal: invalid reference"
+    assert_not_contains "$output" "Preparing"
+}
+
 # ==============================================================================
 # CONCURRENT ACCESS TESTS
 # ==============================================================================

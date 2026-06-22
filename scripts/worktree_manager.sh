@@ -170,7 +170,7 @@ remove_worktree() {
         else
             error_log "remove_worktree: path=$worktree_path branch=$branch_name exit=$exit_code err=$error_output"
             local error_msg
-            error_msg=$(echo "$error_output" | head -1 | cut -c1-60)
+            error_msg=$(_git_error_summary "$error_output")
             if [ -n "$error_msg" ]; then
                 tmux display-message "Remove failed: $error_msg"
             else
@@ -764,6 +764,17 @@ _worktree_vars() {
     _WT_PATH="$WORKTREE_BASE/$project_name/$branch"
 }
 
+# Pick the most useful line from git stderr for a status-bar message.
+# git worktree add prints "Preparing worktree ..." before the real "fatal:"
+# line, so head -1 alone surfaces the progress line instead of the cause.
+_git_error_summary() {
+    local out="$1" line
+    line=$(printf '%s\n' "$out" | grep -m1 -iE '^(fatal|error):')
+    [ -z "$line" ] && line=$(printf '%s\n' "$out" | grep -viE '^Preparing worktree' | head -1)
+    [ -z "$line" ] && line=$(printf '%s\n' "$out" | head -1)
+    printf '%s' "$line" | cut -c1-60
+}
+
 # tmux after-new-session hook entry point. Called once per new session with
 # the session name and its default-path. Cds into the path so git resolves
 # correctly, then delegates to adopt_current_session.
@@ -954,7 +965,7 @@ add_worktree() {
     else
         error_log "add_worktree: cwd=$(pwd) branch=$branch remote_ref=$remote_ref path=$worktree_path exit=$exit_code err=$error_output"
         local error_msg
-        error_msg=$(echo "$error_output" | head -1 | cut -c1-60)
+        error_msg=$(_git_error_summary "$error_output")
         if [ -n "$error_msg" ]; then
             tmux display-message "Failed: $error_msg"
         else
@@ -968,6 +979,21 @@ create_new_worktree() {
     require_git_repo || return 1
     local branch="$1"
     debug_log "create_new_worktree called: branch='$branch'"
+
+    # Normalize unambiguous noise: surrounding whitespace and trailing slashes
+    # (git never allows a branch name to end in '/'). Everything else is left
+    # for git check-ref-format to reject with a clear message rather than guess.
+    branch="${branch#"${branch%%[![:space:]]*}"}"
+    branch="${branch%"${branch##*[![:space:]]}"}"
+    while [ "${branch%/}" != "$branch" ]; do
+        branch="${branch%/}"
+    done
+    if ! git check-ref-format --branch "$branch" >/dev/null 2>&1; then
+        error_log "create_new_worktree: invalid branch name '$branch'"
+        tmux display-message "Invalid branch name: $branch"
+        return 1
+    fi
+
     local project_name
     project_name=$(get_project_name)
     _worktree_vars "$branch" "$project_name"
@@ -994,7 +1020,7 @@ create_new_worktree() {
     else
         error_log "create_new_worktree: cwd=$(pwd) branch=$branch path=$worktree_path exit=$exit_code err=$error_output"
         local error_msg
-        error_msg=$(echo "$error_output" | head -1 | cut -c1-60)
+        error_msg=$(_git_error_summary "$error_output")
         if [ -n "$error_msg" ]; then
             tmux display-message "Failed: $error_msg"
         else
