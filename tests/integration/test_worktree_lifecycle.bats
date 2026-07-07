@@ -832,6 +832,41 @@ _adopt_canonical_name() {
     grep -q "$expected" "$msg_log" || { echo "no collision message emitted; log:"; cat "$msg_log"; return 1; }
 }
 
+@test "adopt_current_session does not report a false collision via prefix match" {
+    local expected sibling orig="stray-adopt-prefix"
+    expected=$(_adopt_canonical_name master)
+    sibling="${expected}-2"
+
+    tmux_run kill-session -t "=$expected" 2>/dev/null || true
+    tmux_run kill-session -t "=$sibling" 2>/dev/null || true
+
+    # A session whose name has "$expected" as a prefix, but not "$expected" itself.
+    tmux_run new-session -d -s "$sibling" -c "$TEST_REPO_DIR"
+
+    # Force rename to fail so the else-branch collision check runs, while the
+    # canonical name is genuinely free. has-session hits the real server so the
+    # exact-match semantics are exercised.
+    local msg_log="$BATS_TEST_TMPDIR/false_collision_msgs"
+    : > "$msg_log"
+    tmux() {
+        case "$1" in
+            rename-session) return 1 ;;
+            display-message) shift; printf '%s\n' "$*" >> "$msg_log"; return 0 ;;
+            *) tmux_run "$@" ;;
+        esac
+    }
+
+    adopt_current_session "$orig"
+    unset -f tmux
+
+    tmux_run kill-session -t "=$sibling" 2>/dev/null || true
+
+    # No exact "$expected" session exists, so no "already exists" message is due.
+    ! grep -q "already exists" "$msg_log" || {
+        echo "false collision reported against prefixed sibling; log:"; cat "$msg_log"; return 1;
+    }
+}
+
 @test "adopt_current_session is a no-op when tmux query returns empty" {
     # Explicit empty session name simulates "not in tmux"
     run adopt_current_session ""
