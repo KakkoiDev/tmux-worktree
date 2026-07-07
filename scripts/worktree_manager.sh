@@ -180,9 +180,9 @@ remove_worktree() {
     fi
 
     # Kill the tmux session if it exists (try both naming patterns)
-    if tmux kill-session -t "$session_name" 2>/dev/null; then
+    if tmux kill-session -t "=$session_name" 2>/dev/null; then
         debug_log "remove_worktree: session killed: $session_name"
-    elif tmux kill-session -t "$branch_name" 2>/dev/null; then
+    elif tmux kill-session -t "=$branch_name" 2>/dev/null; then
         debug_log "remove_worktree: session killed: $branch_name"
     fi
 
@@ -886,9 +886,9 @@ switch_worktree() {
     record_recent_branch "$project_name" "$branch"
 
     # Switch to existing session or create a new one
-    if tmux has-session -t "$session_name" 2>/dev/null; then
+    if tmux has-session -t "=$session_name" 2>/dev/null; then
         debug_log "switch_worktree: switching to existing session=$session_name"
-        tmux switch-client -t "$session_name"
+        tmux switch-client -t "=$session_name"
     else
         debug_log "switch_worktree: creating new session=$session_name"
         # Capture session_id (immutable). See _setup_worktree for why: external
@@ -1279,7 +1279,7 @@ bulk_remove_worktrees() {
 
         local sn
         sn=$(get_session_name "$project_name" "$b")
-        tmux kill-session -t "$sn" 2>/dev/null || tmux kill-session -t "$b" 2>/dev/null || true
+        tmux kill-session -t "=$sn" 2>/dev/null || tmux kill-session -t "=$b" 2>/dev/null || true
 
         remove_recent_branch "$project_name" "$b"
     done

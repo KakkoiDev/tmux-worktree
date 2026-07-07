@@ -362,3 +362,70 @@ teardown() {
     [[ "$output" == *'show_add_worktree_menu\'* ]]
     [[ "$output" == *'show_remove_worktree_menu\'* ]]
 }
+
+# ==============================================================================
+# Session name prefix-collision regression
+# ==============================================================================
+# tmux resolves a `-t` target by: session-id, exact name, then start-of-name
+# (prefix), then glob. Two worktrees like `pfxcol` and `pfxcol-2` yield session
+# names where one is a prefix of the other. When the shorter session is not
+# alive, tmux prefix-matches the target to the longer session, so switch lands
+# on the wrong worktree and remove kills the wrong session. The fix pins every
+# computed-name lookup to an exact match with a leading `=`.
+
+@test "switch_worktree does not hijack a session whose name it prefixes" {
+    source "$SCRIPTS_DIR/worktree_manager.sh"
+
+    local project short_session long_session pfx_path
+    project=$(get_project_name)
+    short_session=$(get_session_name "$project" "pfxcol")
+    long_session=$(get_session_name "$project" "pfxcol-2")
+
+    # Clear any leftovers from a prior (possibly failed) run on the shared server.
+    tmux_run kill-session -t "=$short_session" 2>/dev/null || true
+    tmux_run kill-session -t "=$long_session" 2>/dev/null || true
+
+    # Worktree for the short branch so `new-session -c "$path"` can cd into it.
+    pfx_path=$(create_test_worktree "pfxcol")
+
+    # Only the longer session is alive; the short one is not. Without an exact
+    # target, tmux would prefix-match "$short_session" to "$long_session".
+    tmux_run new-session -d -s "$long_session" -c "$TEST_REPO_DIR"
+
+    switch_worktree "pfxcol" "$pfx_path" || true
+
+    # Correct behavior: no exact match existed, so a new short session was created
+    # at the correct path rather than resolving to the longer session.
+    run tmux_run has-session -t "=$short_session"
+    assert_success
+
+    tmux_run kill-session -t "=$short_session" 2>/dev/null || true
+    tmux_run kill-session -t "=$long_session" 2>/dev/null || true
+    remove_test_worktree "$pfx_path" true
+}
+
+@test "remove_worktree does not kill a sibling session whose name it prefixes" {
+    source "$SCRIPTS_DIR/worktree_manager.sh"
+
+    local project short_session long_session pfx_path
+    project=$(get_project_name)
+    short_session=$(get_session_name "$project" "pfxcol")
+    long_session=$(get_session_name "$project" "pfxcol-2")
+
+    tmux_run kill-session -t "=$short_session" 2>/dev/null || true
+    tmux_run kill-session -t "=$long_session" 2>/dev/null || true
+
+    pfx_path=$(create_test_worktree "pfxcol")
+
+    # Sibling "-2" session is alive; the removed branch's own session is not.
+    tmux_run new-session -d -s "$long_session" -c "$TEST_REPO_DIR"
+
+    remove_worktree "$pfx_path" "pfxcol" "$short_session" 1 || true
+
+    # The sibling session must survive: kill-session must not prefix-match it.
+    run tmux_run has-session -t "=$long_session"
+    assert_success
+
+    tmux_run kill-session -t "=$long_session" 2>/dev/null || true
+    git branch -D pfxcol 2>/dev/null || true
+}
