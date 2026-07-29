@@ -195,17 +195,34 @@ set -g status-right '#{?TMUX_WORKTREE,#[fg=green]#{TMUX_WORKTREE_BRANCH},}'
 
 ```bash
 git clone https://github.com/KakkoiDev/tmux-worktree ~/.tmux/plugins/tmux-worktree
+~/.tmux/plugins/tmux-worktree/install.sh
 ```
 
-Add to `~/.tmux.conf`:
+`install.sh` checks the dependencies and the tmux version, appends the source
+line to `~/.tmux.conf`, and reloads. It is idempotent, and it refuses rather than
+adding a second entry if a different checkout is already sourced.
+
+Or do it by hand, adding to `~/.tmux.conf`:
 
 ```bash
 run-shell ~/.tmux/plugins/tmux-worktree/worktrees.tmux
 ```
 
+Set `TMUX_CONF` to install into a config other than `~/.tmux.conf`.
+
 ## Uninstall
 
-Remove the plugin line from `~/.tmux.conf` and reload. Optionally delete worktrees: `rm -rf ~/.tmux-worktree`.
+```bash
+~/.tmux/plugins/tmux-worktree/uninstall.sh
+```
+
+Removes only the config line. Worktrees, `~/.tmux-worktree` and the persisted
+options are user data and are left alone; delete them by hand if you want them
+gone.
+
+Both scripts write the config with `cat tmp > conf` rather than `mv tmp conf`,
+because a dotfiles-managed `~/.tmux.conf` is usually a symlink and `mv` would
+replace the link with a regular file, silently detaching every later edit.
 
 ## Acknowledgments
 
