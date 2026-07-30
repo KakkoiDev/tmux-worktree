@@ -176,19 +176,33 @@ teardown() {
 # ==============================================================================
 
 @test "branch sanitization removes newlines" {
-    # Test via get_branch_data which uses the sanitization
-    # Create a branch and verify output doesn't contain newlines
+    # get_branch_data emits one menu record per branch, so its output is
+    # legitimately multi-line and "contains no newline" was never the claim. The
+    # old assertion was `[[ $output != *newline* ]] || [[ $output == *run-shell* ]]`,
+    # whose right-hand side is true for all menu output, so it asserted nothing at
+    # all - and as a bare compound on bash 3.2 it could not have failed anyway.
+    #
+    # The real claim of issue #26 is per record: a sanitized branch name cannot
+    # smuggle a newline and turn one record into two. So assert the record count,
+    # which is what an injected newline would change.
     run get_branch_data 1 ""
     assert_success
-    # Output should not contain literal newlines in branch names
-    [[ "$output" != *$'\n'* ]] || [[ "$output" == *"run-shell"* ]]
+    local branches records
+    branches=$(git branch --format='%(refname:short)' | wc -l | tr -d ' ')
+    records=$(printf '%s\n' "$output" | grep -c 'run-shell' || true)
+    assert_num_ge "$records" 1
+    assert_num_le "$records" "$branches"
+    # Every line that is not a record continuation must itself be a record, i.e.
+    # no line is a stray fragment left by a split record.
+    refute_match_re "$output" '^[[:space:]]*$'
 }
 
 @test "branch sanitization removes carriage returns" {
     run get_branch_data 1 ""
     assert_success
-    # Output should not contain carriage returns
-    [[ "$output" != *$'\r'* ]]
+    # A substring test, spelled as one. The old form was a glob `*<CR>*` passed
+    # unquoted, which additionally went through pathname expansion first.
+    refute_contains "$output" $'\r'
 }
 
 @test "branch names with special chars are sanitized" {
@@ -397,6 +411,6 @@ count_char() {
     run sanitize_filter "feature.*test"
     assert_success
     # Should be escaped or handled safely
-    [[ "$output" != *'`'* ]]  # No backticks
-    [[ "$output" != *'$('* ]]  # No command substitution
+    refute_contains "$output" '`' # No backticks
+    refute_contains "$output" '$(' # No command substitution
 }

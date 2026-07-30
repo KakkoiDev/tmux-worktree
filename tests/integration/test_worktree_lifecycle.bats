@@ -56,7 +56,7 @@ teardown() {
     run get_project_name
     assert_success
     # Should only contain alphanumeric, dash, underscore, dot
-    [[ "$output" =~ ^[a-zA-Z0-9._-]+$ ]]
+    assert_match_re "$output" '^[a-zA-Z0-9._-]+$'
     # Should contain part of the repo directory name
     assert_contains "$output" "shared-repo"
 }
@@ -112,7 +112,7 @@ teardown() {
     # First line should be a number (page count)
     local first_line
     first_line=$(echo "$output" | head -1)
-    [[ "$first_line" =~ ^[0-9]+$ ]]
+    assert_match_re "$first_line" '^[0-9]+$'
 }
 
 @test "get_branch_data returns branches" {
@@ -230,7 +230,7 @@ teardown() {
 
     # Should not be in list
     run git worktree list
-    [[ "$output" != *"test-list-update"* ]]
+    refute_contains "$output" "test-list-update"
 
     git branch -D "test-list-update"
 }
@@ -564,7 +564,7 @@ teardown() {
 
     # Should be gone from list
     run git worktree list
-    [[ "$output" != *"$wt_path"* ]]
+    refute_contains "$output" "$wt_path"
 
     # Cleanup
     git branch -D "$branch" 2>/dev/null || true

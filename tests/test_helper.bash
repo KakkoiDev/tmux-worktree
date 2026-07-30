@@ -262,12 +262,110 @@ assert_failure() {
     fi
 }
 
-# Assert string matches regex pattern
-assert_matches() {
-    local pattern="$1"
-    local actual="$2"
+# Assert string matches an ERE.
+#
+# Subject first, like assert_contains and its 225 callers. This replaces
+# assert_matches, which took the pattern first: two assertions in the same file
+# with opposite argument orders is a silent-pass waiting to happen, and it only
+# had two callers against assert_contains's 225, so the minority moved.
+assert_match_re() {
+    local actual="$1"
+    local pattern="$2"
     if [[ ! "$actual" =~ $pattern ]]; then
         echo "Expected '$actual' to match pattern '$pattern'" >&2
+        return 1
+    fi
+}
+
+# Assert string does NOT match an ERE.
+refute_match_re() {
+    local actual="$1"
+    local pattern="$2"
+    if [[ "$actual" =~ $pattern ]]; then
+        echo "Expected '$actual' to NOT match pattern '$pattern'" >&2
+        return 1
+    fi
+}
+
+# Assert a glob pattern matches. $2 is deliberately unquoted at the comparison,
+# which is what makes it a pattern rather than a literal.
+assert_match() {
+    local actual="$1"
+    local pattern="$2"
+    # shellcheck disable=SC2053
+    if [[ ! "$actual" == $pattern ]]; then
+        echo "Expected '$actual' to match glob '$pattern'" >&2
+        return 1
+    fi
+}
+
+refute_match() {
+    local actual="$1"
+    local pattern="$2"
+    # shellcheck disable=SC2053
+    if [[ "$actual" == $pattern ]]; then
+        echo "Expected '$actual' to NOT match glob '$pattern'" >&2
+        return 1
+    fi
+}
+
+# assert_one_of <actual> <allowed>... - for a value that legitimately has more
+# than one correct answer. Replaces `[[ "$x" -eq 0 || "$x" -eq 1 ]]`, which as a
+# bare compound was inert on bash 3.2 as well as hard to read.
+assert_one_of() {
+    local actual="$1"; shift
+    local c
+    for c in "$@"; do
+        [[ "$actual" == "$c" ]] && return 0
+    done
+    echo "Expected one of [$*], got '$actual'" >&2
+    return 1
+}
+
+# Numeric comparisons. `-ge`/`-le` fail loudly on a non-numeric operand, which is
+# what you want from a count assertion: an empty $(... | wc -l) should be a test
+# failure, not a silent zero.
+assert_num_ge() {
+    if [[ ! "$1" -ge "$2" ]]; then
+        echo "Expected >= $2, got '$1'" >&2
+        return 1
+    fi
+}
+
+assert_num_le() {
+    if [[ ! "$1" -le "$2" ]]; then
+        echo "Expected <= $2, got '$1'" >&2
+        return 1
+    fi
+}
+
+# Assert a directory does NOT exist.
+refute_dir() {
+    if [[ -d "$1" ]]; then
+        echo "Directory should not exist: $1" >&2
+        return 1
+    fi
+}
+
+# assert_no_crash - the assertion four tests were reaching for and not making.
+#
+# They each wrote `[[ "$status" -eq 0 ]] || [[ "$status" -ne 0 ]]` with a comment
+# saying "always true - verifies no crash". It is indeed always true, so it
+# verified nothing, and as a bare compound it could not have failed regardless.
+#
+# "Did not crash" is testable: a shell reports a signal death as 128+N, so 139 is
+# SIGSEGV and 134 is SIGABRT. Anything below 126 is the command choosing its own
+# exit status, which is the definition of handling the case rather than crashing.
+# 126 and 127 are "not executable" and "not found", which are also real failures
+# worth catching rather than waving through.
+assert_no_crash() {
+    if [[ -z "${status:-}" ]]; then
+        echo "assert_no_crash: no \$status; call it after \`run\`" >&2
+        return 1
+    fi
+    if [[ "$status" -ge 126 ]]; then
+        echo "Crashed or could not execute: status $status" >&2
+        echo "Output: $output" >&2
         return 1
     fi
 }

@@ -147,7 +147,7 @@ teardown() {
     run get_branch_data 1 ""
     assert_success
     # Should only have local branches, not origin prefixed ones
-    [[ "$output" != *"origin/"* ]]
+    refute_contains "$output" "origin/"
 
     # Cleanup
     git remote remove origin
@@ -218,7 +218,7 @@ teardown() {
     assert_contains "$output" '"feature-two"'
     assert_contains "$output" '"bugfix-123"'
     # Active items must come before plain locals
-    [[ "${output%%feature-two*}" == *"[active] feature-one"* ]]
+    assert_contains "${output%%feature-two*}" "[active] feature-one"
     # Action wired to switch_worktree with the worktree path
     assert_contains "$output" "switch_worktree feature-one"
     assert_contains "$output" "$wt_path"
@@ -382,7 +382,7 @@ teardown() {
     run get_branch_data 1 "feature*" 1
     assert_success
     assert_contains "$output" "feature"
-    [[ "$output" != *"bugfix"* ]]
+    refute_contains "$output" "bugfix"
 
     # Cleanup
     git remote remove origin

@@ -198,7 +198,7 @@ setup() {
 
     run cat "${WORKTREE_BASE}/.tmux-worktree.log"
     # Should have date format like [2024-01-15 10:30:00]
-    [[ "$output" =~ \[[0-9]{4}-[0-9]{2}-[0-9]{2} ]]
+    assert_match_re "$output" '\[[0-9]{4}-[0-9]{2}-[0-9]{2}'
 
     rm -rf "$WORKTREE_BASE"
 }

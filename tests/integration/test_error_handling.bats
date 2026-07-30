@@ -93,21 +93,31 @@ teardown() {
 @test "sanitize_filter strips dangerous characters" {
     run sanitize_filter "test;rm -rf /"
     assert_success
-    # Should strip semicolons and other dangerous chars
-    [[ "$output" != *";"* ]]
-    [[ "$output" != *"rm"* ]] || [[ "$output" == *"rm"* ]]  # rm is safe, just text
+    refute_contains "$output" ";"
+    # The second assertion here used to be `[[ $out != *rm* ]] || [[ $out == *rm* ]]`,
+    # a tautology with a comment explaining that rm is harmless text. It was not an
+    # assertion. The function documents a specific character set it removes, so
+    # assert that set instead: every one of them, individually, from an input that
+    # contains it.
+    local c
+    for c in ';' '$' '`' '(' ')' '{' '}' '[' ']' '|' '&' '<' '>' '\' '"' "'"; do
+        run sanitize_filter "safe${c}name"
+        assert_success
+        refute_contains "$output" "$c"
+        assert_contains "$output" "safename"
+    done
 }
 
 @test "sanitize_filter strips backticks" {
     run sanitize_filter 'test`whoami`'
     assert_success
-    [[ "$output" != *'`'* ]]
+    refute_contains "$output" '`'
 }
 
 @test "sanitize_filter strips dollar signs" {
     run sanitize_filter 'test$HOME'
     assert_success
-    [[ "$output" != *'$'* ]]
+    refute_contains "$output" '$'
 }
 
 # ==============================================================================
@@ -121,9 +131,13 @@ teardown() {
     # Try to remove non-existent worktree
     run remove_worktree "/nonexistent/path" "fake-branch" "fake-session" 1 2>&1
 
-    # Should complete without crashing - git worktree remove will fail but function handles it
-    # Exit status can be 0 (handled) or non-zero (git error), but shouldn't crash
-    [[ "$status" -eq 0 ]] || [[ "$output" == *"fatal"* ]] || [[ "$output" == *"not a"* ]]
+    # Either it handled the missing worktree (status 0) or it surfaced git's own
+    # complaint. Both are acceptable; dying on a signal is not, and the old bare
+    # compound could not distinguish those because it never failed.
+    assert_no_crash
+    if [[ "$status" -ne 0 ]]; then
+        assert_match_re "$output" 'fatal|not a'
+    fi
 }
 
 @test "get_worktree_data works with no additional worktrees" {
@@ -176,11 +190,15 @@ teardown() {
     }
     export -f tmux
 
-    # Empty branch should fail or be rejected
+    # Empty branch should fail or be rejected.
     run create_new_worktree ""
-    # Function should either fail with error or succeed with early exit
-    # Key is it doesn't crash and doesn't create invalid state
-    [[ "$status" -ne 0 ]] || [[ -z "$output" ]] || [[ "$output" == *"error"* ]] || [[ "$output" == *"invalid"* ]] || true
+    # The old line ended in `|| true`, so it asserted nothing whatsoever, and the
+    # stated intent ("doesn't create invalid state") was never checked at all.
+    # Check it: no crash, and no branch or worktree brought into existence for an
+    # empty name.
+    assert_no_crash
+    refute_contains "$(git worktree list)" "$(pwd)/"
+    refute_match_re "$(git branch --format='%(refname:short)')" '^[[:space:]]*$'
 }
 
 @test "create_new_worktree strips a trailing slash from the branch name" {
@@ -285,8 +303,8 @@ teardown() {
     assert_success
     # Should have Back option but no Next/Previous
     assert_contains "$output" "Back"
-    [[ "$output" != *"Next"* ]]
-    [[ "$output" != *"Previous"* ]]
+    refute_contains "$output" "Next"
+    refute_contains "$output" "Previous"
 }
 
 @test "generate_nav_options handles middle page" {
@@ -320,9 +338,13 @@ teardown() {
     cd "$non_git_dir"
 
     run create_new_worktree "test-branch" 2>&1
-    # Should either fail or handle gracefully without creating worktree
-    # The key is it doesn't crash with an unhandled error
-    [[ "$status" -eq 0 ]] || [[ "$status" -ne 0 ]]  # Always true - verifies no crash
+    # The docstring says "without creating worktree", so assert that, not the old
+    # `[[ $status -eq 0 ]] || [[ $status -ne 0 ]]`, which is true for every
+    # possible status including a segfault.
+    assert_no_crash
+    refute_dir "$non_git_dir/test-branch"
+    run git -C "$non_git_dir" rev-parse --git-dir
+    assert_failure
 
     cd "$TEST_REPO_DIR"
     rm -rf "$non_git_dir"
@@ -334,9 +356,13 @@ teardown() {
     cd "$non_git_dir"
 
     run get_project_name
-    # Should either fail, return empty, or return directory name as fallback
-    # The key is it completes without crashing
-    [[ "$status" -eq 0 ]] || [[ "$status" -ne 0 ]]  # Always true - verifies no crash
+    # The comment listed three acceptable outcomes - fail, empty, or the directory
+    # name as a fallback - and then asserted none of them. Assert exactly those:
+    # anything else, including a stray git error leaking into stdout, is a bug.
+    assert_no_crash
+    if [[ "$status" -eq 0 ]]; then
+        assert_one_of "$output" "" "$(basename "$non_git_dir")"
+    fi
 
     cd "$TEST_REPO_DIR"
     rm -rf "$non_git_dir"
@@ -381,11 +407,11 @@ teardown() {
         run sanitize_filter "$dangerous"
         assert_success
         # Should not contain any dangerous characters
-        [[ "$output" != *";"* ]]
-        [[ "$output" != *'`'* ]]
-        [[ "$output" != *'$('* ]]
-        [[ "$output" != *'$'* ]]
-        [[ "$output" != *"|"* ]]
-        [[ "$output" != *"&"* ]]
+        refute_contains "$output" ";"
+        refute_contains "$output" '`'
+        refute_contains "$output" '$('
+        refute_contains "$output" '$'
+        refute_contains "$output" "|"
+        refute_contains "$output" "&"
     done
 }

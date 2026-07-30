@@ -91,8 +91,8 @@ teardown() {
     content=$(cat "$log_file")
 
     # Should contain timestamp pattern and our message
-    [[ "$content" == *"hello from test"* ]]
-    [[ "$content" =~ \[[0-9]{4}-[0-9]{2}-[0-9]{2} ]]
+    assert_contains "$content" "hello from test"
+    assert_match_re "$content" '\[[0-9]{4}-[0-9]{2}-[0-9]{2}'
 }
 
 @test "debug_log does nothing when debug is off" {
@@ -133,7 +133,7 @@ teardown() {
 
     local content
     content=$(cat "$log_file")
-    [[ "$content" == *"cwd="* ]]
+    assert_contains "$content" "cwd="
 }
 
 @test "tmux_worktrees_main logs cwd before git check in non-git dir" {
@@ -153,7 +153,7 @@ teardown() {
     content=$(cat "$log_file")
 
     # Should show the non-git directory as cwd
-    [[ "$content" == *"cwd=$non_git_dir"* ]]
+    assert_contains "$content" "cwd=$non_git_dir"
 
     rm -rf "$non_git_dir"
 }
@@ -172,7 +172,7 @@ teardown() {
     content=$(cat "$log_file")
 
     # git check log only appears after require_git_repo succeeds
-    [[ "$content" != *"git check:"* ]]
+    refute_contains "$content" "git check:"
 
     rm -rf "$non_git_dir"
 }
@@ -211,8 +211,13 @@ teardown() {
     local output
     output=$(get_branch_data 1 "" 0)
 
-    # The dispatch command should include the branch name
-    [[ "$output" == *"add_worktree"*"test-cwd-verify"* ]]
+    # The dispatch command should include the branch name.
+    #
+    # A glob, not a substring: the claim is that add_worktree appears *before*
+    # test-cwd-verify, so two assert_contains calls would drop the ordering. The
+    # quotes come off because neither run contains a glob metacharacter, and
+    # assert_match needs the pattern unquoted at the comparison.
+    assert_match "$output" '*add_worktree*test-cwd-verify*'
 }
 
 @test "main resolves pane CWD before dispatching commands" {

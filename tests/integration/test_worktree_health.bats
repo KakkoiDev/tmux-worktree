@@ -55,8 +55,9 @@ teardown() {
 @test "has_worktree_repair returns based on git version" {
     # Just verify the function runs without error
     run has_worktree_repair
-    # Status should be 0 (has repair) or 1 (no repair) - both are valid
-    [[ "$status" -eq 0 || "$status" -eq 1 ]]
+    # Status should be 0 (has repair) or 1 (no repair) - both are valid, and
+    # anything else means the version probe itself broke.
+    assert_one_of "$status" 0 1
 }
 
 @test "count_stale_worktrees returns 0 when no stale entries" {

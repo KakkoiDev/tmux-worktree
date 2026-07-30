@@ -220,7 +220,7 @@ teardown() {
 
     local first_line
     first_line=$(echo "$output" | head -1)
-    [[ "$first_line" =~ ^[0-9]+$ ]]
+    assert_match_re "$first_line" '^[0-9]+$'
 }
 
 @test "get_branch_data first line is numeric page count" {
@@ -229,7 +229,7 @@ teardown() {
 
     local first_line
     first_line=$(echo "$output" | head -1)
-    [[ "$first_line" =~ ^[0-9]+$ ]]
+    assert_match_re "$first_line" '^[0-9]+$'
 }
 
 @test "get_removable_worktree_data first line is numeric page count" {
@@ -238,7 +238,7 @@ teardown() {
 
     local first_line
     first_line=$(echo "$output" | head -1)
-    [[ "$first_line" =~ ^[0-9]+$ ]]
+    assert_match_re "$first_line" '^[0-9]+$'
 }
 
 # ==============================================================================
@@ -276,7 +276,7 @@ teardown() {
 
     local first_line
     first_line=$(echo "$output" | head -1)
-    [[ "$first_line" =~ ^[0-9]+$ ]]
+    assert_match_re "$first_line" '^[0-9]+$'
 }
 
 @test "empty branch filter returns valid format" {
@@ -286,7 +286,7 @@ teardown() {
     # Should still have valid first line (page count)
     local first_line
     first_line=$(echo "$output" | head -1)
-    [[ "$first_line" =~ ^[0-9]+$ ]]
+    assert_match_re "$first_line" '^[0-9]+$'
 }
 
 # ==============================================================================

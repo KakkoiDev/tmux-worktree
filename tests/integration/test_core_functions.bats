@@ -290,7 +290,7 @@ teardown() {
     run generate_nav_options 1 3 "show_worktree_menu"
     assert_success
     # Should NOT contain Previous
-    [[ "$output" != *"Previous"* ]]
+    refute_contains "$output" "Previous"
 }
 
 @test "generate_nav_options hides next on last page" {
@@ -299,7 +299,7 @@ teardown() {
     run generate_nav_options 3 3 "show_worktree_menu"
     assert_success
     # Should NOT contain Next
-    [[ "$output" != *"Next"* ]]
+    refute_contains "$output" "Next"
 }
 
 # ==============================================================================
@@ -358,9 +358,9 @@ teardown() {
 
     # Each menu function name should appear complete (not cut off)
     # Format is: show_worktree_menu\"" (escaped quote then quote)
-    [[ "$output" == *'show_worktree_menu\'* ]]
-    [[ "$output" == *'show_add_worktree_menu\'* ]]
-    [[ "$output" == *'show_remove_worktree_menu\'* ]]
+    assert_contains "$output" 'show_worktree_menu\'
+    assert_contains "$output" 'show_add_worktree_menu\'
+    assert_contains "$output" 'show_remove_worktree_menu\'
 }
 
 # ==============================================================================

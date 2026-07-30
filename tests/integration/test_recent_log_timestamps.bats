@@ -40,7 +40,7 @@ teardown() {
     record_recent_branch "proj" "alpha"
 
     run cat "$TMUX_WORKTREE_RECENT_FILE"
-    assert_matches "^[0-9]+ proj:alpha$" "$output"
+    assert_match_re "$output" "^[0-9]+ proj:alpha$"
 }
 
 @test "record_recent_branch uses current time as timestamp" {
@@ -116,7 +116,7 @@ teardown() {
 
     local ts
     ts=$(get_recent_timestamp "proj" "alpha")
-    [[ "$ts" =~ ^[0-9]+$ ]]
+    assert_match_re "$ts" '^[0-9]+$'
     [ "$ts" -gt 0 ]
 }
 

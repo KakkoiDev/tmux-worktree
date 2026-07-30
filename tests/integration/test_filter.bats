@@ -164,7 +164,7 @@ teardown() {
 
     run sanitize_filter "\`command\`"
     assert_success
-    [[ "$output" != *"\`"* ]]
+    refute_contains "$output" "\`"
 }
 
 @test "sanitize_filter removes dollar signs" {
@@ -172,7 +172,7 @@ teardown() {
 
     run sanitize_filter "\$HOME"
     assert_success
-    [[ "$output" != *"\$"* ]]
+    refute_contains "$output" "\$"
 }
 
 # ==============================================================================
@@ -192,7 +192,7 @@ teardown() {
     run get_worktree_data 1 "feature*"
     assert_success
     assert_contains "$output" "feature"
-    [[ "$output" != *"bugfix"* ]]
+    refute_contains "$output" "bugfix"
 
     # Cleanup
     git worktree remove -f "$wt_dir/feat-one" 2>/dev/null || true
@@ -208,7 +208,7 @@ teardown() {
     run get_branch_data 1 "feature*"
     assert_success
     assert_contains "$output" "feature"
-    [[ "$output" != *"bugfix"* ]]
+    refute_contains "$output" "bugfix"
 }
 
 @test "get_worktree_page_count with filter counts only matching" {

@@ -125,7 +125,7 @@ teardown() {
     assert_equal "1" "$count"
     run cat "$TMUX_WORKTREE_RECENT_FILE"
     # New format is "<ts> proj:feature-two"; only care that exact match remains and siblings go.
-    assert_matches "^[0-9]+ proj:feature-two$" "$output"
+    assert_match_re "$output" "^[0-9]+ proj:feature-two$"
     refute_contains "$output" " proj:feature$"
 }
 
