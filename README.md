@@ -1,5 +1,10 @@
 # tmux-worktree
 
+> `lib/` is vendored from [tmux-toolkit](https://github.com/KakkoiDev/tmux-toolkit)
+> via `git subtree`; do not edit it in place, CI fails on drift. If you are an agent
+> picking up in-flight work on this plugin, start at
+> [tmux-toolkit `docs/RESUME.md`](https://github.com/KakkoiDev/tmux-toolkit/blob/main/docs/RESUME.md).
+
 > **Beta:** This plugin is under active development. Configuration options and behavior may change.
 
 Native tmux for parallel workflows. AI agents, code reviews, tests. Each task gets its own worktree and session.
