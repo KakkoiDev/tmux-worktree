@@ -55,6 +55,24 @@ jobs:
           shellcheck scripts/*.sh || true
           echo "Shellcheck completed (warnings allowed)"
 
+      # lib/ is vendored from KakkoiDev/tmux-toolkit via git subtree. Editing it
+      # in place here is how five plugins accumulated 26 duplicated helpers in
+      # the first place, so a drifted copy fails the build. Fix it upstream and
+      # run `make fanout` in the toolkit. Unlike shellcheck above, this one is
+      # not `|| true`: a silently drifted library is the failure mode it exists
+      # to catch.
+      - name: lib/ has not drifted from its tagged source
+        run: |
+          have=$(find lib -name '*.sh' | sort | xargs shasum | shasum | cut -d' ' -f1)
+          want=$(cat lib/.checksum)
+          if [ "$have" != "$want" ]; then
+            echo "lib/ has drifted from tmux-toolkit $(cat lib/VERSION)" >&2
+            echo "  expected $want" >&2
+            echo "  actual   $have" >&2
+            exit 1
+          fi
+          echo "lib/ matches tmux-toolkit $(cat lib/VERSION)"
+
   smoke:
     runs-on: ubuntu-latest
     steps:

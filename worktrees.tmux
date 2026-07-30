@@ -29,9 +29,9 @@ load_config
 check_keybinding_conflict() {
     local key="$1"
     local existing
-    existing=$(tmux list-keys -T prefix 2>/dev/null | grep "bind-key -T prefix *$key " || true)
+    existing=$(tk_tmux list-keys -T prefix 2>/dev/null | grep "bind-key -T prefix *$key " || true)
     if [ -n "$existing" ]; then
-        tmux display-message "tmux-worktree: Note: prefix+$key was rebound (use @worktree-keybinding to change)"
+        tk_display "tmux-worktree: Note: prefix+$key was rebound (use @worktree-keybinding to change)"
     fi
 }
 
@@ -39,11 +39,7 @@ check_keybinding_conflict() {
 # Only bind if we're in a tmux environment
 if [ -n "$TMUX" ] || [ -n "$TMUX_SOCKET" ]; then
     check_keybinding_conflict "$KEYBINDING"
-    if [ -n "$TMUX_SOCKET" ]; then
-        tmux -L "$TMUX_SOCKET" bind-key "$KEYBINDING" run-shell "tmux display-message 'Opening...' ; $SCRIPTS_DIR/worktree_manager.sh tmux_worktrees_main"
-    else
-        tmux bind-key "$KEYBINDING" run-shell "tmux display-message 'Opening...' ; $SCRIPTS_DIR/worktree_manager.sh tmux_worktrees_main"
-    fi
+    tk_tmux bind-key "$KEYBINDING" run-shell "tmux display-message 'Opening...' ; $SCRIPTS_DIR/worktree_manager.sh tmux_worktrees_main"
 
     # Register after-new-session hook to adopt host sessions into the plugin's
     # naming convention. Plugin-created sessions already match the convention
@@ -51,18 +47,12 @@ if [ -n "$TMUX" ] || [ -n "$TMUX_SOCKET" ]; then
     # user hooks; opt-out via @worktree-adopt-session=off.
     if [ "${ADOPT_SESSION:-on}" != "off" ]; then
         hook_cmd="run-shell \"$SCRIPTS_DIR/worktree_manager.sh adopt_session_hook '#{session_name}' '#{session_path}'\""
-        if [ -n "$TMUX_SOCKET" ]; then
-            tmux -L "$TMUX_SOCKET" set-hook -ag after-new-session "$hook_cmd"
-        else
-            tmux set-hook -ag after-new-session "$hook_cmd"
-        fi
+        tk_tmux set-hook -ag after-new-session "$hook_cmd"
 
         # Sweep existing sessions once at plugin load: the after-new-session
         # hook only fires for future sessions, so any session created before
         # the plugin was installed/reloaded keeps its default name otherwise.
-        tmux_bin="tmux"
-        [ -n "$TMUX_SOCKET" ] && tmux_bin="tmux -L $TMUX_SOCKET"
-        $tmux_bin list-sessions -F '#{session_name}|#{session_path}' 2>/dev/null \
+        tk_tmux list-sessions -F '#{session_name}|#{session_path}' 2>/dev/null \
             | while IFS='|' read -r _name _path; do
                 [ -z "$_name" ] && continue
                 "$SCRIPTS_DIR/worktree_manager.sh" adopt_session_hook "$_name" "$_path" >/dev/null 2>&1 || true

@@ -10,35 +10,6 @@
 
 TMUX_WORKTREE_VERSION="0.1.0"
 
-# ==============================================================================
-# VERSION CHECKS
-# ==============================================================================
-
-# Check tmux version (display-menu requires 3.0+)
-# Returns 0 if compatible, 1 if not
-check_tmux_version() {
-    local version_string
-    local major_version
-
-    version_string=$(tmux -V 2>/dev/null | sed 's/[^0-9.]//g')
-    major_version=$(echo "$version_string" | cut -d. -f1)
-
-    if [ -z "$major_version" ] || [ "$major_version" -lt 3 ]; then
-        return 1
-    fi
-    return 0
-}
-
-# Display error if tmux version is incompatible
-ensure_tmux_version() {
-    if ! check_tmux_version; then
-        echo "Error: tmux-worktree requires tmux 3.0+ (display-menu support)" >&2
-        echo "Current version: $(tmux -V 2>/dev/null || echo 'unknown')" >&2
-        return 1
-    fi
-    return 0
-}
-
 # Determine plugin directory (works when sourced or executed)
 if [ -n "$TMUX_WORKTREES_PLUGIN_DIR" ]; then
     PLUGIN_DIR="$TMUX_WORKTREES_PLUGIN_DIR"
@@ -51,29 +22,50 @@ fi
 SCRIPTS_DIR="$PLUGIN_DIR/scripts"
 
 # ==============================================================================
+# VENDORED TMUX-TOOLKIT
+# ==============================================================================
+#
+# lib/ is a git subtree of KakkoiDev/tmux-toolkit's dist branch. It is the same
+# code tmux-agent-mesh, -tracker, -resumer and tmux-session-order vendor, so a fix
+# lands once instead of five times. Do not edit it in place: CI recomputes
+# lib/.checksum and fails if it has drifted.
+#
+# TK_SOCKET is what collapses this file's fifteen hand-copied
+# `if [ -n "$TMUX_SOCKET" ]` branches into one. tk_tmux prepends -L when it is
+# set, so every call site becomes a plain `tk_tmux ...` with no fork.
+
+# shellcheck source=../lib/toolkit.sh
+source "$PLUGIN_DIR/lib/toolkit.sh"
+tk_require_version 0.2.0
+tk_init worktree "${WORKTREE_BASE:-$HOME/.tmux-worktree}"
+# shellcheck disable=SC2034  # read by tk_tmux in the vendored lib/tmux.sh
+TK_SOCKET="${TMUX_SOCKET:-}"
+
+# ==============================================================================
+# VERSION CHECKS
+# ==============================================================================
+
+# Check tmux version (display-menu requires 3.0+)
+# Returns 0 if compatible, 1 if not
+check_tmux_version() { tk_vers_ge 3.0; }
+
+# Display error if tmux version is incompatible
+ensure_tmux_version() {
+    if ! check_tmux_version; then
+        echo "Error: tmux-worktree requires tmux 3.0+ (display-menu support)" >&2
+        echo "Current version: $(tk_vers)" >&2
+        return 1
+    fi
+    return 0
+}
+
+# ==============================================================================
 # TMUX CONFIGURATION HELPERS
 # ==============================================================================
 
 # Get tmux option with fallback default
 # Usage: get_tmux_option "@option-name" "default-value"
-get_tmux_option() {
-    local option="$1"
-    local default="$2"
-    local value
-
-    # Use the test socket if set, otherwise default tmux
-    if [ -n "$TMUX_SOCKET" ]; then
-        value=$(tmux -L "$TMUX_SOCKET" show-option -gqv "$option" 2>/dev/null)
-    else
-        value=$(tmux show-option -gqv "$option" 2>/dev/null)
-    fi
-
-    if [ -n "$value" ]; then
-        echo "$value"
-    else
-        echo "$default"
-    fi
-}
+get_tmux_option() { tk_opt "$1" "$2"; }
 
 # Validate positive integer, return default if invalid
 # Usage: validate_positive_int "value" "default" "option_name"
@@ -121,29 +113,12 @@ limit_filter() {
 # Get config cache file path (unique per tmux server)
 _get_config_cache_file() {
     local tmux_pid
-    # Respect TMUX_SOCKET for testing
-    if [ -n "$TMUX_SOCKET" ]; then
-        tmux_pid=$(tmux -L "$TMUX_SOCKET" display-message -p '#{pid}' 2>/dev/null || echo "notmux")
-    else
-        tmux_pid=$(tmux display-message -p '#{pid}' 2>/dev/null || echo "notmux")
-    fi
-    echo "/tmp/tmux-worktree-config-${tmux_pid}"
+    tmux_pid=$(tk_server_pid)
+    echo "/tmp/tmux-worktree-config-${tmux_pid:-notmux}"
 }
 
 # Check if config cache is valid (exists and less than 5 minutes old)
-_is_cache_valid() {
-    local cache_file="$1"
-    [ -f "$cache_file" ] || return 1
-
-    # Check age - cache valid for 300 seconds (5 minutes)
-    local cache_age
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        cache_age=$(( $(date +%s) - $(stat -f %m "$cache_file" 2>/dev/null || echo 0) ))
-    else
-        cache_age=$(( $(date +%s) - $(stat -c %Y "$cache_file" 2>/dev/null || echo 0) ))
-    fi
-    [ "$cache_age" -lt 300 ]
-}
+_is_cache_valid() { tk_fresh "$1" 300; }
 
 # Load config from tmux and write to cache file
 _load_config_from_tmux() {
@@ -185,36 +160,15 @@ _load_config_from_tmux() {
     MAX_AGE_CHOICES=$(get_tmux_option "@worktree-max-age-choices" "7,30,90")
     [ -z "$MAX_AGE_CHOICES" ] && MAX_AGE_CHOICES="7,30,90"
 
-    # Track which options were explicitly set (non-empty raw value)
+    # Track which options were explicitly set (non-empty raw value). A project
+    # .tmux-worktree.conf may only override an option the user did NOT set in tmux,
+    # so this needs the raw value, not get_tmux_option's defaulted one.
     _EXPLICIT_OPTIONS=""
-    local _raw_val
-    if [ -n "$TMUX_SOCKET" ]; then
-        _raw_val=$(tmux -L "$TMUX_SOCKET" show-option -gqv "@worktree-fetch-prune" 2>/dev/null) || true
-    else
-        _raw_val=$(tmux show-option -gqv "@worktree-fetch-prune" 2>/dev/null) || true
-    fi
-    [ -n "$_raw_val" ] && _EXPLICIT_OPTIONS="${_EXPLICIT_OPTIONS}fetch-prune "
-
-    if [ -n "$TMUX_SOCKET" ]; then
-        _raw_val=$(tmux -L "$TMUX_SOCKET" show-option -gqv "@worktree-copy-ignored" 2>/dev/null) || true
-    else
-        _raw_val=$(tmux show-option -gqv "@worktree-copy-ignored" 2>/dev/null) || true
-    fi
-    [ -n "$_raw_val" ] && _EXPLICIT_OPTIONS="${_EXPLICIT_OPTIONS}copy-ignored "
-
-    if [ -n "$TMUX_SOCKET" ]; then
-        _raw_val=$(tmux -L "$TMUX_SOCKET" show-option -gqv "@worktree-max-age-days" 2>/dev/null) || true
-    else
-        _raw_val=$(tmux show-option -gqv "@worktree-max-age-days" 2>/dev/null) || true
-    fi
-    [ -n "$_raw_val" ] && _EXPLICIT_OPTIONS="${_EXPLICIT_OPTIONS}max-age-days "
-
-    if [ -n "$TMUX_SOCKET" ]; then
-        _raw_val=$(tmux -L "$TMUX_SOCKET" show-option -gqv "@worktree-max-age-choices" 2>/dev/null) || true
-    else
-        _raw_val=$(tmux show-option -gqv "@worktree-max-age-choices" 2>/dev/null) || true
-    fi
-    [ -n "$_raw_val" ] && _EXPLICIT_OPTIONS="${_EXPLICIT_OPTIONS}max-age-choices "
+    local _opt _raw_val
+    for _opt in fetch-prune copy-ignored max-age-days max-age-choices; do
+        _raw_val=$(tk_tmux show-option -gqv "@worktree-$_opt" 2>/dev/null) || true
+        [ -n "$_raw_val" ] && _EXPLICIT_OPTIONS="${_EXPLICIT_OPTIONS}$_opt "
+    done
 
     # Write to cache file for next invocation
     cat > "$cache_file" 2>/dev/null <<CACHE
@@ -394,11 +348,7 @@ restore_saved_options() {
         [ -z "$key" ] && continue
         [[ "$key" == \#* ]] && continue
 
-        if [ -n "$TMUX_SOCKET" ]; then
-            tmux -L "$TMUX_SOCKET" set-option -g "$key" "$value" 2>/dev/null || true
-        else
-            tmux set-option -g "$key" "$value" 2>/dev/null || true
-        fi
+        tk_tmux set-option -g "$key" "$value" 2>/dev/null || true
     done < "$state_file"
 }
 

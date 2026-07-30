@@ -12,6 +12,24 @@ setup() {
 # ==============================================================================
 # VERSION CHECK TESTS
 # ==============================================================================
+#
+# The stubs below match `-V` anywhere in the argument list, not at $1. The suite
+# exports TMUX_SOCKET=test-worktrees and check_tmux_version now goes through
+# tk_tmux, which prepends `-L test-worktrees`, so a stub keyed on $1 answers
+# nothing. That is how "fails for tmux 2.x" was passing while asserting nothing
+# about version parsing: the stub returned no version at all, and no version
+# reads as too old.
+
+_stub_tmux_version() {
+    local v="$1"
+    eval "tmux() {
+        case \" \$* \" in
+            *' -V '*|*' -V') printf 'tmux %s\n' '$v' ;;
+            *) : ;;
+        esac
+    }"
+    export -f tmux
+}
 
 @test "check_tmux_version returns 0 for current tmux" {
     # Real tmux should be 3.x+ for these tests to run
@@ -20,38 +38,25 @@ setup() {
 }
 
 @test "check_tmux_version parses version correctly" {
-    # Mock tmux to return specific version
-    tmux() {
-        if [ "$1" = "-V" ]; then
-            echo "tmux 3.2a"
-        fi
-    }
-    export -f tmux
-
+    _stub_tmux_version "3.2a"
     run check_tmux_version
     assert_success
 }
 
 @test "check_tmux_version fails for tmux 2.x" {
-    tmux() {
-        if [ "$1" = "-V" ]; then
-            echo "tmux 2.9"
-        fi
-    }
-    export -f tmux
-
+    _stub_tmux_version "2.9"
     run check_tmux_version
     assert_failure
 }
 
-@test "ensure_tmux_version displays error for old tmux" {
-    tmux() {
-        if [ "$1" = "-V" ]; then
-            echo "tmux 2.8"
-        fi
-    }
-    export -f tmux
+@test "check_tmux_version accepts 3.10, which a major-only or digit-concat compare gets wrong" {
+    _stub_tmux_version "3.10"
+    run check_tmux_version
+    assert_success
+}
 
+@test "ensure_tmux_version displays error for old tmux" {
+    _stub_tmux_version "2.8"
     run ensure_tmux_version
     assert_failure
     assert_contains "$output" "requires tmux 3.0+"

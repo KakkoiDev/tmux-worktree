@@ -1320,11 +1320,7 @@ set_option() {
     local value="$2"
     debug_log "set_option: key=$key value=$value"
 
-    if [ -n "$TMUX_SOCKET" ]; then
-        tmux -L "$TMUX_SOCKET" set-option -g "$key" "$value"
-    else
-        tmux set-option -g "$key" "$value"
-    fi
+    tk_tmux set-option -g "$key" "$value"
     save_option "$key" "$value"
     show_options_menu
 }
