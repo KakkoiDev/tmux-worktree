@@ -874,11 +874,17 @@ adopt_current_session() {
         # Propagate plugin env vars to the session so future panes/processes
         # see the same context as plugin-created sessions.
         local worktree_path=""
-        [ "$in_git" = "1" ] && worktree_path=$(git rev-parse --show-toplevel 2>/dev/null)
+        if [ "$in_git" = "1" ]; then
+            worktree_path=$(git rev-parse --show-toplevel 2>/dev/null)
+        fi
         tmux setenv -t "$expected" TMUX_WORKTREE 1 2>/dev/null || true
         tmux setenv -t "$expected" TMUX_WORKTREE_PROJECT "$project" 2>/dev/null || true
-        [ -n "$branch" ] && tmux setenv -t "$expected" TMUX_WORKTREE_BRANCH "$branch" 2>/dev/null || true
-        [ -n "$worktree_path" ] && tmux setenv -t "$expected" TMUX_WORKTREE_PATH "$worktree_path" 2>/dev/null || true
+        if [ -n "$branch" ]; then
+            tmux setenv -t "$expected" TMUX_WORKTREE_BRANCH "$branch" 2>/dev/null || true
+        fi
+        if [ -n "$worktree_path" ]; then
+            tmux setenv -t "$expected" TMUX_WORKTREE_PATH "$worktree_path" 2>/dev/null || true
+        fi
     else
         debug_log "adopt_current_session: rename failed '$current_name' -> '$expected'"
         if tmux has-session -t "=$expected" 2>/dev/null; then
