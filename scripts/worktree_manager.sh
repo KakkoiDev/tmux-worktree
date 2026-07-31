@@ -23,9 +23,11 @@ else
 fi
 
 # Source helpers and load config (only if not already loaded in test context)
+# shellcheck disable=SC1091 # Runtime path is derived from this script's location.
 source "$SCRIPT_DIR/helpers.sh"
+# shellcheck disable=SC1091 # Runtime path is derived from this script's location.
 source "$SCRIPT_DIR/filter.sh"
-# shellcheck source=../lib/menu.sh
+# shellcheck disable=SC1091 # Runtime path is derived from the plugin checkout.
 source "${PLUGIN_DIR:-$SCRIPT_DIR/..}/lib/menu.sh"
 # Skip load_config if WORKTREE_BASE is already set to a temp path (test mode)
 if [[ ! "$WORKTREE_BASE" == /tmp/* ]]; then
@@ -81,13 +83,13 @@ fetch_remote_branches() {
     debug_log "Starting git fetch in $(pwd) with timeout ${timeout_seconds}s"
 
     # Build fetch command (--prune only when explicitly enabled)
-    local fetch_args="--all"
+    local fetch_args=(--all)
     if [ "${FETCH_PRUNE:-off}" = "on" ]; then
-        fetch_args="--all --prune"
+        fetch_args+=(--prune)
     fi
 
     # Run git fetch with timeout, capture stderr
-    if run_with_timeout "$timeout_seconds" git fetch $fetch_args 2>"$error_file"; then
+    if run_with_timeout "$timeout_seconds" git fetch "${fetch_args[@]}" 2>"$error_file"; then
         debug_log "Fetch completed successfully"
         tmux display-message "Remote branches fetched successfully"
         rm -f "$error_file"
@@ -96,7 +98,7 @@ fetch_remote_branches() {
         local exit_code=$?
         local error_msg
         error_msg=$(head -1 "$error_file" 2>/dev/null | cut -c1-80)
-        error_log "fetch_remote_branches: cwd=$(pwd) args=$fetch_args exit=$exit_code err=$(cat "$error_file" 2>/dev/null)"
+        error_log "fetch_remote_branches: cwd=$(pwd) args=${fetch_args[*]} exit=$exit_code err=$(cat "$error_file" 2>/dev/null)"
 
         # Show first line of error (truncated) or generic message
         if [ -n "$error_msg" ]; then
@@ -523,11 +525,6 @@ _add_nav_items() {
     local extra2=${6:-}
     local script_path="$SCRIPT_DIR/worktree_manager.sh"
 
-    local filter_args=""
-    if [ -n "$filter" ]; then
-        filter_args="'$filter'"
-    fi
-
     # Build the sub-args list for tk_menu_cmd.
     # We must pass each positional arg separately so quoting works.
     local _nav_args=()
@@ -538,7 +535,8 @@ _add_nav_items() {
         [ -n "$filter" ] && _nav_args+=("$filter")
         [ -n "$extra1" ] && _nav_args+=("$extra1")
         [ -n "$extra2" ] && _nav_args+=("$extra2")
-        local prev_cmd="display-message 'Loading...' ; $(tk_menu_cmd "${_nav_args[@]}")"
+        local prev_cmd
+        prev_cmd="display-message 'Loading...' ; $(tk_menu_cmd "${_nav_args[@]}")"
         tk_menu_item "◀ Previous" "$KEY_PREV" "$prev_cmd"
     fi
 
@@ -548,7 +546,8 @@ _add_nav_items() {
         [ -n "$filter" ] && _nav_args+=("$filter")
         [ -n "$extra1" ] && _nav_args+=("$extra1")
         [ -n "$extra2" ] && _nav_args+=("$extra2")
-        local next_cmd="display-message 'Loading...' ; $(tk_menu_cmd "${_nav_args[@]}")"
+        local next_cmd
+        next_cmd="display-message 'Loading...' ; $(tk_menu_cmd "${_nav_args[@]}")"
         tk_menu_item "Next ▶" "$KEY_NEXT" "$next_cmd"
     fi
 
@@ -627,7 +626,7 @@ show_worktree_menu() {
 
     # Clear filter option (only when filter active, preserves sort_recent)
     if [ -n "$filter" ]; then
-        tk_menu_item "Clear filter" "$KEY_CLEAR_FILTER" "$(tk_menu_cmd "$script_path" show_worktree_menu 1 '' $sort_recent)"
+        tk_menu_item "Clear filter" "$KEY_CLEAR_FILTER" "$(tk_menu_cmd "$script_path" show_worktree_menu 1 '' "$sort_recent")"
     fi
 
     # Parse TSV worktree items
@@ -847,7 +846,7 @@ adopt_current_session() {
     # Adoption must derive the project from this session's own directory, never
     # from a TMUX_WORKTREE_PROJECT inherited by the hook/sweep child process
     # (it leaks across unrelated sessions and mis-stamps every adopted name).
-    project=$(TMUX_WORKTREE_PROJECT= get_project_name)
+    project=$(TMUX_WORKTREE_PROJECT='' get_project_name)
     [ -z "$project" ] && return 0
 
     # Sanitized "<project>-" prefix (matches whatever get_session_name will emit,
@@ -1086,7 +1085,7 @@ show_add_worktree_menu() {
 
     # Clear filter option (only when filter active)
     if [ -n "$filter" ]; then
-        tk_menu_item "Clear filter" "$KEY_CLEAR_FILTER" "$(tk_menu_cmd "$script_path" show_add_worktree_menu 1 '' $include_remotes)"
+        tk_menu_item "Clear filter" "$KEY_CLEAR_FILTER" "$(tk_menu_cmd "$script_path" show_add_worktree_menu 1 '' "$include_remotes")"
     fi
 
     # Parse TSV branch items
@@ -1389,7 +1388,7 @@ show_options_menu() {
     # Trim whitespace from each entry.
     local _i
     for _i in "${!_age_arr[@]}"; do
-        _age_arr[$_i]="${_age_arr[$_i]// /}"
+        _age_arr[_i]="${_age_arr[_i]// /}"
     done
     if [ "${#_age_arr[@]}" -eq 0 ]; then
         _age_arr=("7" "30" "90")
