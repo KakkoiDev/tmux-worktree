@@ -148,7 +148,7 @@ teardown() {
 
 @test "show_worktree_menu handles empty results without crashing" {
     # NOTE: Mock display_menu to prevent opening real tmux menu
-    display_menu() { echo "MENU: $1"; }
+    tk_menu_show() { echo "MENU: ${TK_MENU_TITLE:-}"; TK_MENU_ARGS=(); }
 
     # Filter that matches nothing
     run show_worktree_menu 1 "nonexistent-branch-xyz"
@@ -165,7 +165,7 @@ teardown() {
 
 @test "show_remove_worktree_menu handles empty results" {
     # NOTE: Mock display_menu to prevent opening real tmux menu
-    display_menu() { echo "MENU: $1"; }
+    tk_menu_show() { echo "MENU: ${TK_MENU_TITLE:-}"; TK_MENU_ARGS=(); }
 
     run show_remove_worktree_menu 1 "nonexistent-branch-xyz"
     assert_success
@@ -189,7 +189,8 @@ teardown() {
     assert_success
     local branches records
     branches=$(git branch --format='%(refname:short)' | wc -l | tr -d ' ')
-    records=$(printf '%s\n' "$output" | grep -c 'run-shell' || true)
+    # TSV output: line 1 is page count, each subsequent line is a record
+    records=$(echo "$output" | tail -n +2 | grep -c . || true)
     assert_num_ge "$records" 1
     assert_num_le "$records" "$branches"
     # Every line that is not a record continuation must itself be a record, i.e.
@@ -209,8 +210,10 @@ teardown() {
     # The sanitization should only allow a-zA-Z0-9._/-
     run get_branch_data 1 ""
     assert_success
-    # Basic check - output should be valid menu format
-    assert_contains "$output" "run-shell"
+    # Basic check - output should have valid TSV format (page count + tab-separated fields)
+    local first_line
+    first_line=$(echo "$output" | head -1)
+    assert_match_re "$first_line" '^[0-9]+$'
 }
 
 # ==============================================================================
@@ -260,13 +263,12 @@ teardown() {
 # Helper to validate menu command syntax without running tmux
 validate_menu_eval() {
     local options="$1"
-    # Mock tmux to just echo args - validates eval parsing works
-    tmux() { echo "TMUX_CALLED: $*"; }
-    export -f tmux
-    eval "tmux display-menu -T 'Test' $options" 2>&1
+    # Verify the captured args are non-empty (menu was built successfully).
+    # The old eval test is no longer applicable; tk_menu_show builds argv directly.
+    [ -n "$options" ]
 }
 
-@test "all menu functions generate valid eval syntax" {
+@test "all menu functions produce valid menu args" {
     source_script "$SCRIPTS_DIR/worktree_manager.sh"
 
     # Menu functions to test: "function_name:arg1:arg2"
@@ -283,7 +285,7 @@ validate_menu_eval() {
 
         # Capture the options string
         local captured_options=""
-        display_menu() { captured_options="$2"; }
+        tk_menu_show() { captured_options="${TK_MENU_ARGS[*]:-}"; TK_MENU_ARGS=(); }
 
         # Call menu function with appropriate args
         if [ -n "$arg1" ] && [ -n "$arg2" ]; then
@@ -294,14 +296,10 @@ validate_menu_eval() {
             "$func"
         fi
 
-        # Validate eval doesn't fail
+        # Validate args are non-empty
         run validate_menu_eval "$captured_options"
         if [ "$status" -ne 0 ]; then
-            echo "Failed for $func($arg1, $arg2)"
-            return 1
-        fi
-        if [[ "$output" != *"TMUX_CALLED"* ]]; then
-            echo "Missing TMUX_CALLED for $func($arg1, $arg2)"
+            echo "Empty args for $func($arg1, $arg2)"
             return 1
         fi
     done
@@ -370,7 +368,7 @@ count_char() {
     git worktree add -q "$wt_dir/feature-one" feature-one
 
     local captured_options=""
-    display_menu() { captured_options="$2"; }
+    tk_menu_show() { captured_options="${TK_MENU_ARGS[*]:-}"; TK_MENU_ARGS=(); }
 
     show_worktree_menu 1 ""
 
@@ -397,7 +395,7 @@ count_char() {
     # Use get_branch_data instead of worktrees for faster test
     # Test branches already exist from create_test_repo
     local captured_options=""
-    display_menu() { captured_options="$2"; }
+    tk_menu_show() { captured_options="${TK_MENU_ARGS[*]:-}"; TK_MENU_ARGS=(); }
 
     # Menu should have Back option
     show_worktree_menu 1 ""

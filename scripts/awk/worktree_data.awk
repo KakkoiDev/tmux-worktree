@@ -1,8 +1,9 @@
-# worktree_data.awk - Generate menu items for worktree list
+# worktree_data.awk - Generate TSV rows for worktree list menu
 # Input: git worktree list --porcelain
-# Variables: project, filter, items_per_page, start, end, script_path
+# Variables: project, filter, items_per_page, start, end, script_path (unused in TSV)
 #            recent_ages (optional): "branch|age;branch|age;..." map for age annotations
-# Output: Line 1 = total_pages, Line 2 = space-separated menu items
+# Output: Line 1 = total_pages, subsequent lines = TSV rows
+# TSV columns: label, branch, full_path
 
 BEGIN {
     count = 0
@@ -22,7 +23,7 @@ BEGIN {
     }
 }
 
-function format_label(b,   label) {
+function format_label(b) {
     label = b
     if (b in age_map) {
         label = label " (" age_map[b] ")"
@@ -35,43 +36,36 @@ function format_label(b,   label) {
 /^branch/ {
     branch = $2
     sub("refs/heads/", "", branch)
-    # Sanitize branch name - remove newlines and shell metacharacters
     gsub(/[\r\n]/, "", branch)
     gsub(/[^a-zA-Z0-9._\/-]/, "", branch)
 
-    # Apply filter (case-insensitive)
     if (filter == "" || tolower(branch) ~ tolower(filter)) {
         count++
         line_num++
         if (line_num >= start && line_num <= end) {
             label = format_label(branch)
-            items[line_num] = "\"" label "\" \"\" \"display-message \\\"Switching...\\\" ; run-shell \\\"'" script_path "' switch_worktree " branch " \\\\\\\"" full_path "\\\\\\\"\\\"\""
+            items[line_num] = label "\t" branch "\t" full_path
         }
     }
 }
 /^detached/ {
-    # Handle detached HEAD worktrees
     branch = "HEAD@" head_sha
 
-    # Apply filter (case-insensitive)
     if (filter == "" || tolower(branch) ~ tolower(filter)) {
         count++
         line_num++
         if (line_num >= start && line_num <= end) {
             label = format_label(branch)
-            items[line_num] = "\"" label "\" \"\" \"display-message \\\"Switching...\\\" ; run-shell \\\"'" script_path "' switch_worktree " branch " \\\\\\\"" full_path "\\\\\\\"\\\"\""
+            items[line_num] = label "\t" branch "\t" full_path
         }
     }
 }
 END {
-    # Calculate total pages
     total_pages = int((count + items_per_page - 1) / items_per_page)
     if (total_pages < 1) total_pages = 1
     print total_pages
 
-    # Output menu items
     for (i = start; i <= end && i <= line_num; i++) {
-        if (items[i] != "") printf "%s ", items[i]
+        if (items[i] != "") print items[i]
     }
-    if (line_num > 0) print ""
 }

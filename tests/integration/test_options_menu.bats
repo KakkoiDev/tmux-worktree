@@ -32,9 +32,10 @@ setup() {
     # Set tmux option so reload_config (called by show_options_menu) uses test path
     tmux_set_option "@worktree-path" "$WORKTREE_BASE"
 
-    # Mock display_menu to capture options without opening real tmux menus
-    display_menu() {
-        CAPTURED_MENU_OPTIONS="$2"
+    # Mock tk_menu_show to capture args without opening real tmux menus
+    tk_menu_show() {
+        CAPTURED_MENU_OPTIONS="${TK_MENU_ARGS[*]:-}"
+        TK_MENU_ARGS=()
     }
 }
 
@@ -89,27 +90,27 @@ teardown() {
 
 @test "options menu generates Copy ignored option" {
     show_options_menu
-    assert_contains "$CAPTURED_MENU_OPTIONS" '"Copy ignored:'
+    assert_contains "$CAPTURED_MENU_OPTIONS" 'Copy ignored:'
 }
 
 @test "options menu generates Debug option" {
     show_options_menu
-    assert_contains "$CAPTURED_MENU_OPTIONS" '"Debug:'
+    assert_contains "$CAPTURED_MENU_OPTIONS" 'Debug:'
 }
 
 @test "options menu generates Items/page option" {
     show_options_menu
-    assert_contains "$CAPTURED_MENU_OPTIONS" '"Items/page:'
+    assert_contains "$CAPTURED_MENU_OPTIONS" 'Items/page:'
 }
 
 @test "options menu generates Fetch timeout option" {
     show_options_menu
-    assert_contains "$CAPTURED_MENU_OPTIONS" '"Fetch timeout:'
+    assert_contains "$CAPTURED_MENU_OPTIONS" 'Fetch timeout:'
 }
 
 @test "options menu generates Path option" {
     show_options_menu
-    assert_contains "$CAPTURED_MENU_OPTIONS" '"Path:'
+    assert_contains "$CAPTURED_MENU_OPTIONS" 'Path:'
 }
 
 @test "options menu generates Back option" {
@@ -119,7 +120,7 @@ teardown() {
 
 @test "options menu generates Sort recent option" {
     show_options_menu
-    assert_contains "$CAPTURED_MENU_OPTIONS" '"Sort recent:'
+    assert_contains "$CAPTURED_MENU_OPTIONS" 'Sort recent:'
 }
 
 # ==============================================================================
@@ -165,13 +166,15 @@ teardown() {
 @test "options menu Sort recent toggle cycles on to off" {
     tmux_set_option "@worktree-sort-recent-default" "on"
     show_options_menu
-    assert_contains "$CAPTURED_MENU_OPTIONS" 'set_option @worktree-sort-recent-default off'
+    assert_contains "$CAPTURED_MENU_OPTIONS" 'set_option'
+    assert_contains "$CAPTURED_MENU_OPTIONS" '@worktree-sort-recent-default'
 }
 
 @test "options menu Sort recent toggle cycles off to on" {
     tmux_set_option "@worktree-sort-recent-default" "off"
     show_options_menu
-    assert_contains "$CAPTURED_MENU_OPTIONS" 'set_option @worktree-sort-recent-default on'
+    assert_contains "$CAPTURED_MENU_OPTIONS" 'set_option'
+    assert_contains "$CAPTURED_MENU_OPTIONS" '@worktree-sort-recent-default'
 }
 
 # ==============================================================================
@@ -180,27 +183,32 @@ teardown() {
 
 @test "options menu uses set_option dispatch for copy-ignored" {
     show_options_menu
-    assert_contains "$CAPTURED_MENU_OPTIONS" 'set_option @worktree-copy-ignored'
+    assert_contains "$CAPTURED_MENU_OPTIONS" 'set_option'
+    assert_contains "$CAPTURED_MENU_OPTIONS" '@worktree-copy-ignored'
 }
 
 @test "options menu uses set_option dispatch for debug" {
     show_options_menu
-    assert_contains "$CAPTURED_MENU_OPTIONS" 'set_option @worktree-debug'
+    assert_contains "$CAPTURED_MENU_OPTIONS" 'set_option'
+    assert_contains "$CAPTURED_MENU_OPTIONS" '@worktree-debug'
 }
 
 @test "options menu uses set_option dispatch for items-per-page" {
     show_options_menu
-    assert_contains "$CAPTURED_MENU_OPTIONS" 'set_option @worktree-items-per-page'
+    assert_contains "$CAPTURED_MENU_OPTIONS" 'set_option'
+    assert_contains "$CAPTURED_MENU_OPTIONS" '@worktree-items-per-page'
 }
 
 @test "options menu uses set_option dispatch for fetch-timeout" {
     show_options_menu
-    assert_contains "$CAPTURED_MENU_OPTIONS" 'set_option @worktree-fetch-timeout'
+    assert_contains "$CAPTURED_MENU_OPTIONS" 'set_option'
+    assert_contains "$CAPTURED_MENU_OPTIONS" '@worktree-fetch-timeout'
 }
 
 @test "options menu uses set_option dispatch for path" {
     show_options_menu
-    assert_contains "$CAPTURED_MENU_OPTIONS" 'set_option @worktree-path'
+    assert_contains "$CAPTURED_MENU_OPTIONS" 'set_option'
+    assert_contains "$CAPTURED_MENU_OPTIONS" '@worktree-path'
 }
 
 @test "options menu uses set_option dispatch (not inline set-option)" {

@@ -1,19 +1,10 @@
-# stale_data.awk - Generate menu items for bulk-remove preview
+# stale_data.awk - Generate TSV rows for bulk-remove preview menu
 # Input: git worktree list --porcelain
-# Variables:
-#   current_dir         - pwd of invoking tmux pane (this worktree is skipped)
-#   script_path         - absolute path to worktree_manager.sh
-#   current_page        - page number to preserve after per-row remove
-#   project             - project name (for session name generation)
-#   filter              - case-insensitive regex applied to branch
-#   items_per_page      - pagination window
-#   start / end         - inclusive line range within filtered results
-#   threshold_days      - age threshold in days
-#   threshold_seconds   - age threshold in seconds (threshold_days * 86400)
-#   now                 - current unix timestamp
-#   recent_ts_pairs     - "branch|ts;branch|ts;..." from get_recent_entries
-#   recent_age_pairs    - "branch|age_label;branch|age_label;..." for display
-# Output: Line 1 = total_pages, Line 2 = space-separated menu items.
+# Variables: current_dir, script_path (unused in TSV), current_page, project,
+#            filter, items_per_page, start, end, threshold_days, threshold_seconds,
+#            now, recent_ts_pairs, recent_age_pairs
+# Output: Line 1 = total_pages, subsequent lines = TSV rows
+# TSV columns: label, full_path, branch, session_name, current_page
 #
 # Inclusion rule: a worktree is "stale" when (now - ts_of_its_branch) >= threshold_seconds.
 # Branches absent from the recent log resolve to ts=0 and are always stale (age "never").
@@ -49,7 +40,7 @@ BEGIN {
     }
 }
 
-function age_label(b,   a) {
+function age_label(b) {
     if (b in age_map) return age_map[b]
     return "never"
 }
@@ -81,7 +72,7 @@ function is_stale(b,   ts) {
                     gsub("[.:]", "_", session_name)
 
                     label = branch " (" age_label(branch) ")"
-                    items[line_num] = "\"" label "\" \"\" \"display-message \\\"Removing worktree...\\\" ; run-shell \\\"'" script_path "' remove_worktree \\\\\\\"" full_path "\\\\\\\" \\\\\\\"" branch "\\\\\\\" \\\\\\\"" session_name "\\\\\\\" " current_page "\\\"\""
+                    items[line_num] = label "\t" full_path "\t" branch "\t" session_name "\t" current_page
                 }
             }
         }
@@ -100,7 +91,7 @@ function is_stale(b,   ts) {
                     gsub("[.:]", "_", session_name)
 
                     label = branch " (" age_label(branch) ")"
-                    items[line_num] = "\"" label "\" \"\" \"display-message \\\"Removing worktree...\\\" ; run-shell \\\"'" script_path "' remove_worktree \\\\\\\"" full_path "\\\\\\\" \\\\\\\"\\\\\\\" \\\\\\\"" session_name "\\\\\\\" " current_page "\\\"\""
+                    items[line_num] = label "\t" full_path "\t" "" "\t" session_name "\t" current_page
                 }
             }
         }
@@ -112,7 +103,6 @@ END {
     print total_pages
 
     for (i = start; i <= end && i <= line_num; i++) {
-        if (items[i] != "") printf "%s ", items[i]
+        if (items[i] != "") print items[i]
     }
-    if (line_num > 0) print ""
 }

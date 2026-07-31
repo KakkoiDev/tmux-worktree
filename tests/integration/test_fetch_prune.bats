@@ -133,8 +133,9 @@ teardown() {
 @test "options menu shows fetch prune toggle" {
     source "$SCRIPTS_DIR/worktree_manager.sh"
 
-    display_menu() {
-        echo "$2"
+    tk_menu_show() {
+        printf '%s\n' "${TK_MENU_ARGS[@]}"
+        TK_MENU_ARGS=()
     }
 
     FETCH_PRUNE="off"
@@ -146,22 +147,26 @@ teardown() {
 @test "options menu cycles fetch prune from off to on" {
     source "$SCRIPTS_DIR/worktree_manager.sh"
 
-    display_menu() {
-        echo "$2"
+    tk_menu_show() {
+        printf '%s\n' "${TK_MENU_ARGS[@]}"
+        TK_MENU_ARGS=()
     }
 
     # Default is off, so next value should be on
     run show_options_menu
     assert_success
     assert_contains "$output" "Fetch prune: off"
-    assert_contains "$output" "@worktree-fetch-prune on"
+    # tk_menu_cmd produces single-quoted args
+    assert_contains "$output" "@worktree-fetch-prune"
+    assert_contains "$output" "'on'"
 }
 
 @test "options menu cycles fetch prune from on to off" {
     source "$SCRIPTS_DIR/worktree_manager.sh"
 
-    display_menu() {
-        echo "$2"
+    tk_menu_show() {
+        printf '%s\n' "${TK_MENU_ARGS[@]}"
+        TK_MENU_ARGS=()
     }
 
     # Set to on via tmux, next value should be off
@@ -169,7 +174,9 @@ teardown() {
     run show_options_menu
     assert_success
     assert_contains "$output" "Fetch prune: on"
-    assert_contains "$output" "@worktree-fetch-prune off"
+    # tk_menu_cmd produces single-quoted args
+    assert_contains "$output" "@worktree-fetch-prune"
+    assert_contains "$output" "'off'"
 
     # Cleanup
     tmux_run set-option -gu "@worktree-fetch-prune"

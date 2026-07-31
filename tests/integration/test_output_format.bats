@@ -85,30 +85,64 @@ teardown() {
 }
 
 # ==============================================================================
-# RUN-SHELL COMMAND FORMAT TESTS
+# TSV DATA FORMAT TESTS (awk now emits TSV, menu.sh builds the commands)
 # ==============================================================================
 
-@test "worktree menu run-shell commands are properly formatted" {
+@test "worktree data TSV has tab-separated fields" {
     run get_worktree_data 1 ""
     assert_success
 
-    # Each run-shell command should have the format: run-shell "..."
-    # The content after page count line should contain run-shell
+    # After header line, each line should be TSV with at least 3 fields
     local data_lines
     data_lines=$(echo "$output" | tail -n +2)
 
     if [ -n "$data_lines" ]; then
-        # Check that run-shell commands are present and properly quoted
-        assert_contains "$output" "run-shell"
+        # First data line should have at least 2 tabs
+        local first_data
+        first_data=$(echo "$data_lines" | head -1)
+        local tab_count
+        tab_count=$(echo "$first_data" | tr -cd '\t' | wc -c)
+        [ "$tab_count" -ge 2 ]
     fi
 }
 
-@test "branch menu run-shell commands are properly formatted" {
+@test "branch data TSV has tab-separated fields" {
     run get_branch_data 1 ""
     assert_success
 
-    # Should contain run-shell commands for branch selection
-    assert_contains "$output" "run-shell"
+    local data_lines
+    data_lines=$(echo "$output" | tail -n +2)
+
+    if [ -n "$data_lines" ]; then
+        local first_data
+        first_data=$(echo "$data_lines" | head -1)
+        local tab_count
+        tab_count=$(echo "$first_data" | tr -cd '\t' | wc -c)
+        [ "$tab_count" -ge 2 ]
+    fi
+}
+
+@test "full menu pipeline produces run-shell commands via tk_menu_cmd" {
+    # Capture tk_menu_show output to verify run-shell commands are produced
+    local captured_args=""
+    tk_menu_show() {
+        captured_args="${TK_MENU_ARGS[*]:-}"
+        TK_MENU_ARGS=()
+    }
+
+    show_worktree_menu 1 ""
+    assert_contains "$captured_args" "run-shell"
+}
+
+@test "full branch menu pipeline produces run-shell commands via tk_menu_cmd" {
+    local captured_args=""
+    tk_menu_show() {
+        captured_args="${TK_MENU_ARGS[*]:-}"
+        TK_MENU_ARGS=()
+    }
+
+    show_add_worktree_menu 1 ""
+    assert_contains "$captured_args" "run-shell"
 }
 
 # ==============================================================================
@@ -117,7 +151,10 @@ teardown() {
 
 @test "worktree menu title includes page info" {
     local captured_title=""
-    display_menu() { captured_title="$1"; }
+    tk_menu_show() {
+        captured_title="${TK_MENU_TITLE:-}"
+        TK_MENU_ARGS=()
+    }
 
     show_worktree_menu 1 ""
 
@@ -127,7 +164,10 @@ teardown() {
 
 @test "add worktree menu title includes page info" {
     local captured_title=""
-    display_menu() { captured_title="$1"; }
+    tk_menu_show() {
+        captured_title="${TK_MENU_TITLE:-}"
+        TK_MENU_ARGS=()
+    }
 
     show_add_worktree_menu 1 ""
 
@@ -136,7 +176,10 @@ teardown() {
 
 @test "remove worktree menu title includes page info" {
     local captured_title=""
-    display_menu() { captured_title="$1"; }
+    tk_menu_show() {
+        captured_title="${TK_MENU_TITLE:-}"
+        TK_MENU_ARGS=()
+    }
 
     show_remove_worktree_menu 1 ""
 
@@ -144,35 +187,33 @@ teardown() {
 }
 
 # ==============================================================================
-# EVAL SAFETY TESTS
+# TK_MENU API SAFETY TESTS
 # ==============================================================================
 
-@test "menu options can be safely eval'd" {
-    local captured_options=""
-    display_menu() { captured_options="$2"; }
+@test "menu construction via tk_menu_show does not use eval" {
+    # With TK_MENU_DRYRUN=1, tk_menu_show prints arg vector (no eval)
+    local captured_output
+    tk_menu_show() {
+        captured_output="${TK_MENU_ARGS[*]:-}"
+        TK_MENU_ARGS=()
+    }
 
     show_worktree_menu 1 ""
 
-    # Try to eval the options with a mock tmux
-    tmux() { echo "TMUX_CALLED"; }
-    export -f tmux
-
-    # This should not fail
-    run eval "tmux display-menu -T 'Test' $captured_options"
-    assert_success
+    # Should have produced output without eval
+    [ -n "$captured_output" ]
 }
 
-@test "branch menu options can be safely eval'd" {
-    local captured_options=""
-    display_menu() { captured_options="$2"; }
+@test "branch menu construction via tk_menu_show does not use eval" {
+    local captured_output
+    tk_menu_show() {
+        captured_output="${TK_MENU_ARGS[*]:-}"
+        TK_MENU_ARGS=()
+    }
 
     show_add_worktree_menu 1 ""
 
-    tmux() { echo "TMUX_CALLED"; }
-    export -f tmux
-
-    run eval "tmux display-menu -T 'Test' $captured_options"
-    assert_success
+    [ -n "$captured_output" ]
 }
 
 # ==============================================================================
@@ -247,7 +288,10 @@ teardown() {
 
 @test "filtered menu title shows filter indicator" {
     local captured_title=""
-    display_menu() { captured_title="$1"; }
+    tk_menu_show() {
+        captured_title="${TK_MENU_TITLE:-}"
+        TK_MENU_ARGS=()
+    }
 
     show_worktree_menu 1 "feature*"
 
@@ -256,13 +300,19 @@ teardown() {
     [ -n "$captured_title" ]
 }
 
-@test "filter appears in navigation options when active" {
-    run generate_nav_options 1 1 "show_worktree_menu" "feature*" ""
-    assert_success
+@test "_add_nav_items builds navigation for filtered menu" {
+    # Build nav items via _add_nav_items (side-effect on TK_MENU_ARGS)
+    tk_menu_reset
+    _add_nav_items 1 1 "show_worktree_menu" "feature*" ""
 
-    # Should have filter-related option or pass filter through
-    # The output format will include the filter in commands
-    [ -n "$output" ]
+    # Should have produced at least the Back item
+    local count
+    count=$(tk_menu_count)
+    [ "$count" -gt 0 ]
+
+    # Args should contain "Back" label
+    local args_flat="${TK_MENU_ARGS[*]:-}"
+    assert_contains "$args_flat" "Back"
 }
 
 # ==============================================================================

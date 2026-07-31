@@ -55,7 +55,7 @@ teardown() {
 
     # Mock display_menu to prevent real menu opens
     # See CONTRIBUTING.md "Testing Menu Functions" for details.
-    display_menu() { echo "MENU_CALLED"; }
+    tk_menu_show() { echo "MENU_CALLED"; TK_MENU_ARGS=(); }
 
     run show_worktree_menu 1 ""
     assert_failure
@@ -65,7 +65,7 @@ teardown() {
     cd "$NON_GIT_DIR"
 
     # Mock display_menu to prevent real menu opens
-    display_menu() { echo "MENU_CALLED"; }
+    tk_menu_show() { echo "MENU_CALLED"; TK_MENU_ARGS=(); }
 
     run show_add_worktree_menu 1 ""
     assert_failure
@@ -75,7 +75,7 @@ teardown() {
     cd "$NON_GIT_DIR"
 
     # Mock display_menu to prevent real menu opens
-    display_menu() { echo "MENU_CALLED"; }
+    tk_menu_show() { echo "MENU_CALLED"; TK_MENU_ARGS=(); }
 
     run show_remove_worktree_menu 1 ""
     assert_failure
@@ -118,7 +118,7 @@ teardown() {
     cd "$SHARED_REPO_DIR"
 
     # Mock display_menu to prevent real menu opens
-    display_menu() { echo "MENU_CALLED"; }
+    tk_menu_show() { echo "MENU_CALLED"; TK_MENU_ARGS=(); }
 
     run tmux_worktrees_main
     assert_success

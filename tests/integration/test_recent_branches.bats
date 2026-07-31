@@ -37,10 +37,11 @@ setup() {
     # Use isolated recent file for each test
     export TMUX_WORKTREE_RECENT_FILE="$WORKTREE_BASE/.recent-test.log"
 
-    # Mock display_menu to capture title and options
-    display_menu() {
-        CAPTURED_MENU_TITLE="$1"
-        CAPTURED_MENU_OPTIONS="$2"
+    # Mock tk_menu_show to capture title and menu args
+    tk_menu_show() {
+        CAPTURED_MENU_TITLE="${TK_MENU_TITLE:-}"
+        CAPTURED_MENU_OPTIONS="${TK_MENU_ARGS[*]:-}"
+        TK_MENU_ARGS=()
     }
 }
 
@@ -225,12 +226,12 @@ teardown() {
 
 @test "list menu shows Latest first toggle when sort_recent=0" {
     show_worktree_menu 1 "" 0
-    assert_contains "$CAPTURED_MENU_OPTIONS" '"Latest first" "r"'
+    assert_contains "$CAPTURED_MENU_OPTIONS" 'Latest first'
 }
 
 @test "list menu shows Alphabetical toggle when sort_recent=1" {
     show_worktree_menu 1 "" 1
-    assert_contains "$CAPTURED_MENU_OPTIONS" '"Alphabetical" "r"'
+    assert_contains "$CAPTURED_MENU_OPTIONS" 'Alphabetical'
 }
 
 @test "list menu title shows [Latest first] when sort_recent=1" {
@@ -245,24 +246,28 @@ teardown() {
 
 @test "list menu Latest first toggle dispatches with sort_recent=1" {
     show_worktree_menu 1 "" 0
-    assert_contains "$CAPTURED_MENU_OPTIONS" "show_worktree_menu 1 '' 1"
+    assert_contains "$CAPTURED_MENU_OPTIONS" "show_worktree_menu"
+    assert_contains "$CAPTURED_MENU_OPTIONS" "'' '1'"
 }
 
 @test "list menu Alphabetical toggle dispatches with sort_recent=0" {
     show_worktree_menu 1 "" 1
-    assert_contains "$CAPTURED_MENU_OPTIONS" "show_worktree_menu 1 '' 0"
+    assert_contains "$CAPTURED_MENU_OPTIONS" "show_worktree_menu"
+    assert_contains "$CAPTURED_MENU_OPTIONS" "'' '0'"
 }
 
 @test "list menu filter preserves sort_recent state" {
     show_worktree_menu 1 "" 1
-    # Filter command should include sort_recent=1
-    assert_contains "$CAPTURED_MENU_OPTIONS" "show_worktree_menu 1"
-    assert_contains "$CAPTURED_MENU_OPTIONS" "1\\\"'\""
+    # Filter command should include sort_recent=1 in tk_menu_cmd output
+    assert_contains "$CAPTURED_MENU_OPTIONS" "show_worktree_menu"
+    assert_contains "$CAPTURED_MENU_OPTIONS" "run-shell"
 }
 
 @test "list menu clear filter preserves sort_recent state" {
     show_worktree_menu 1 "test*" 1
-    assert_contains "$CAPTURED_MENU_OPTIONS" "show_worktree_menu 1 '' 1"
+    # tk_menu_cmd quotes empty arg as '' in run-shell output
+    assert_contains "$CAPTURED_MENU_OPTIONS" "show_worktree_menu"
+    assert_contains "$CAPTURED_MENU_OPTIONS" "'' '1'"
 }
 
 @test "list menu sort_recent shows all worktrees reordered" {
@@ -344,10 +349,11 @@ teardown() {
     show_worktree_menu 1 "" 0
 
     # In CAPTURED_MENU_OPTIONS, alpha should appear before mango before zebra
+    # Labels are stored directly in TK_MENU_ARGS (no surrounding quotes)
     local alpha_pos mango_pos zebra_pos
-    alpha_pos=$(echo "$CAPTURED_MENU_OPTIONS" | grep -bo '"alpha"' | head -1 | cut -d: -f1)
-    mango_pos=$(echo "$CAPTURED_MENU_OPTIONS" | grep -bo '"mango"' | head -1 | cut -d: -f1)
-    zebra_pos=$(echo "$CAPTURED_MENU_OPTIONS" | grep -bo '"zebra"' | head -1 | cut -d: -f1)
+    alpha_pos=$(echo "$CAPTURED_MENU_OPTIONS" | grep -bo 'alpha ' | head -1 | cut -d: -f1)
+    mango_pos=$(echo "$CAPTURED_MENU_OPTIONS" | grep -bo 'mango ' | head -1 | cut -d: -f1)
+    zebra_pos=$(echo "$CAPTURED_MENU_OPTIONS" | grep -bo 'zebra ' | head -1 | cut -d: -f1)
     [ "$alpha_pos" -lt "$mango_pos" ]
     [ "$mango_pos" -lt "$zebra_pos" ]
 
@@ -367,8 +373,8 @@ teardown() {
     show_worktree_menu 1 "" 0
 
     local apple_pos banana_pos
-    apple_pos=$(echo "$CAPTURED_MENU_OPTIONS" | grep -bo '"apple"' | head -1 | cut -d: -f1)
-    banana_pos=$(echo "$CAPTURED_MENU_OPTIONS" | grep -bo '"Banana"' | head -1 | cut -d: -f1)
+    apple_pos=$(echo "$CAPTURED_MENU_OPTIONS" | grep -bo 'apple ' | head -1 | cut -d: -f1)
+    banana_pos=$(echo "$CAPTURED_MENU_OPTIONS" | grep -bo 'Banana ' | head -1 | cut -d: -f1)
     [ "$apple_pos" -lt "$banana_pos" ]
 
     git worktree remove --force "$wt_dir/Banana" 2>/dev/null || true
@@ -385,14 +391,14 @@ teardown() {
     SORT_RECENT_DEFAULT="on"
     show_worktree_menu 1
     assert_contains "$CAPTURED_MENU_TITLE" "[Latest first]"
-    assert_contains "$CAPTURED_MENU_OPTIONS" '"Alphabetical" "r"'
+    assert_contains "$CAPTURED_MENU_OPTIONS" 'Alphabetical'
 }
 
 @test "list menu defaults to alphabetical when SORT_RECENT_DEFAULT=off" {
     SORT_RECENT_DEFAULT="off"
     show_worktree_menu 1
     assert_contains "$CAPTURED_MENU_TITLE" "[Alphabetical]"
-    assert_contains "$CAPTURED_MENU_OPTIONS" '"Latest first" "r"'
+    assert_contains "$CAPTURED_MENU_OPTIONS" 'Latest first'
 }
 
 @test "list menu defaults to recent-first when SORT_RECENT_DEFAULT unset" {

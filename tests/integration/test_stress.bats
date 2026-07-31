@@ -185,7 +185,7 @@ teardown() {
 
 @test "menu generation is stable under load" {
     # Mock display_menu
-    display_menu() { echo "MENU: $1"; }
+    tk_menu_show() { echo "MENU: ${TK_MENU_TITLE:-}"; TK_MENU_ARGS=(); }
 
     for i in $(seq 1 5); do
         run show_worktree_menu 1 ""

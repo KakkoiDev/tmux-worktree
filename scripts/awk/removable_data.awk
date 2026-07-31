@@ -1,7 +1,9 @@
-# removable_data.awk - Generate menu items for removable worktree list
+# removable_data.awk - Generate TSV rows for removable worktree list
 # Input: git worktree list --porcelain
-# Variables: current_dir, script_path, current_page, project, filter, items_per_page, start, end
-# Output: Line 1 = total_pages, Line 2 = space-separated menu items
+# Variables: current_dir, script_path (unused in TSV), current_page, project,
+#            filter, items_per_page, start, end
+# Output: Line 1 = total_pages, subsequent lines = TSV rows
+# TSV columns: label, full_path, branch, session_name, current_page
 
 BEGIN {
     count = 0
@@ -17,10 +19,8 @@ BEGIN {
     if (path != current_dir) {
         branch = $2
         sub("refs/heads/", "", branch)
-        # Sanitize branch name - remove shell metacharacters
         gsub(/[^a-zA-Z0-9._\/-]/, "", branch)
 
-        # Apply filter (case-insensitive)
         if (filter == "" || tolower(branch) ~ tolower(filter)) {
             count++
             line_num++
@@ -29,19 +29,15 @@ BEGIN {
                 gsub("/", "_", session_name)
                 gsub("[.:]", "_", session_name)
 
-                # Remove worktree only (branch is always kept)
-                # script_path is passed directly via -v, no shell quoting needed
-                items[line_num] = "\"" branch "\" \"\" \"display-message \\\"Removing worktree...\\\" ; run-shell \\\"'" script_path "' remove_worktree \\\\\\\"" full_path "\\\\\\\" \\\\\\\"" branch "\\\\\\\" \\\\\\\"" session_name "\\\\\\\" " current_page "\\\"\""
+                items[line_num] = branch "\t" full_path "\t" branch "\t" session_name "\t" current_page
             }
         }
     }
 }
 /^detached/ {
-    # Handle detached HEAD worktrees
     if (path != current_dir) {
         branch = "HEAD@" head_sha
 
-        # Apply filter (case-insensitive)
         if (filter == "" || tolower(branch) ~ tolower(filter)) {
             count++
             line_num++
@@ -49,21 +45,17 @@ BEGIN {
                 session_name = project "-detached-" head_sha
                 gsub("[.:]", "_", session_name)
 
-                # Detached HEAD worktrees - remove worktree only
-                items[line_num] = "\"" branch "\" \"\" \"display-message \\\"Removing worktree...\\\" ; run-shell \\\"'" script_path "' remove_worktree \\\\\\\"" full_path "\\\\\\\" \\\\\\\"\\\\\\\" \\\\\\\"" session_name "\\\\\\\" " current_page "\\\"\""
+                items[line_num] = branch "\t" full_path "\t" "" "\t" session_name "\t" current_page
             }
         }
     }
 }
 END {
-    # Calculate total pages
     total_pages = int((count + items_per_page - 1) / items_per_page)
     if (total_pages < 1) total_pages = 1
     print total_pages
 
-    # Output menu items
     for (i = start; i <= end && i <= line_num; i++) {
-        if (items[i] != "") printf "%s ", items[i]
+        if (items[i] != "") print items[i]
     }
-    if (line_num > 0) print ""
 }

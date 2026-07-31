@@ -25,6 +25,8 @@ fi
 # Source helpers and load config (only if not already loaded in test context)
 source "$SCRIPT_DIR/helpers.sh"
 source "$SCRIPT_DIR/filter.sh"
+# shellcheck source=../lib/menu.sh
+source "${PLUGIN_DIR:-$SCRIPT_DIR/..}/lib/menu.sh"
 # Skip load_config if WORKTREE_BASE is already set to a temp path (test mode)
 if [[ ! "$WORKTREE_BASE" == /tmp/* ]]; then
     load_config
@@ -511,56 +513,66 @@ get_removable_worktree_page_count() {
 # NAVIGATION HELPER FUNCTIONS
 # ==============================================================================
 
-# Generate navigation options for paginated menus
-generate_nav_options() {
+# Add navigation items to current menu (side-effect: calls tk_menu_item)
+_add_nav_items() {
     local page=$1
     local total_pages=$2
     local menu_function=$3
     local filter=${4:-}
-    local extra_args=${5:-}
+    local extra1=${5:-}
+    local extra2=${6:-}
     local script_path="$SCRIPT_DIR/worktree_manager.sh"
 
-    local nav_options=""
-
-    # Build args string (filter + extra_args)
-    local args_suffix=""
-    if [ -n "$filter" ] || [ -n "$extra_args" ]; then
-        args_suffix="'$filter' $extra_args"
+    local filter_args=""
+    if [ -n "$filter" ]; then
+        filter_args="'$filter'"
     fi
 
-    # Previous page navigation (preserve filter and extra args)
+    # Build the sub-args list for tk_menu_cmd.
+    # We must pass each positional arg separately so quoting works.
+    local _nav_args=()
+
+    # Previous page
     if [ "$page" -gt 1 ]; then
-        if [ -n "$args_suffix" ]; then
-            nav_options="\"◀ Previous\" \"$KEY_PREV\" \"display-message \\\"Loading...\\\" ; run-shell \\\"'$script_path' $menu_function $((page - 1)) $args_suffix\\\"\" "
-        else
-            nav_options="\"◀ Previous\" \"$KEY_PREV\" \"display-message \\\"Loading...\\\" ; run-shell \\\"'$script_path' $menu_function $((page - 1))\\\"\" "
-        fi
+        _nav_args=("$script_path" "$menu_function" "$((page - 1))")
+        [ -n "$filter" ] && _nav_args+=("$filter")
+        [ -n "$extra1" ] && _nav_args+=("$extra1")
+        [ -n "$extra2" ] && _nav_args+=("$extra2")
+        local prev_cmd="display-message 'Loading...' ; $(tk_menu_cmd "${_nav_args[@]}")"
+        tk_menu_item "◀ Previous" "$KEY_PREV" "$prev_cmd"
     fi
 
-    # Next page navigation (preserve filter and extra args)
+    # Next page
     if [ "$page" -lt "$total_pages" ]; then
-        if [ -n "$args_suffix" ]; then
-            nav_options="${nav_options}\"Next ▶\" \"$KEY_NEXT\" \"display-message \\\"Loading...\\\" ; run-shell \\\"'$script_path' $menu_function $((page + 1)) $args_suffix\\\"\" "
-        else
-            nav_options="${nav_options}\"Next ▶\" \"$KEY_NEXT\" \"display-message \\\"Loading...\\\" ; run-shell \\\"'$script_path' $menu_function $((page + 1))\\\"\" "
-        fi
+        _nav_args=("$script_path" "$menu_function" "$((page + 1))")
+        [ -n "$filter" ] && _nav_args+=("$filter")
+        [ -n "$extra1" ] && _nav_args+=("$extra1")
+        [ -n "$extra2" ] && _nav_args+=("$extra2")
+        local next_cmd="display-message 'Loading...' ; $(tk_menu_cmd "${_nav_args[@]}")"
+        tk_menu_item "Next ▶" "$KEY_NEXT" "$next_cmd"
     fi
 
     # Back to main menu
-    nav_options="${nav_options}\"← Back\" \"$KEY_BACK\" \"display-message \\\"Loading...\\\" ; run-shell \\\"'$script_path' tmux_worktrees_main\\\"\""
+    tk_menu_item "← Back" "$KEY_BACK" "display-message 'Loading...' ; $(tk_menu_cmd "$script_path" tmux_worktrees_main)"
+}
 
-    echo "$nav_options"
+# Legacy wrapper for callers that still need string output (none, replaced inline)
+# Kept for backward compat only during transition.
+generate_nav_options() {
+    # This function is no longer used for menu building.
+    # Callers now use _add_nav_items which calls tk_menu_item directly.
+    echo ""
 }
 
 # ==============================================================================
 # MENU DISPLAY FUNCTIONS
 # ==============================================================================
 
-# Generic tmux menu display function
+# Generic tmux menu display function.
+# Delegates to tk_menu_show from vendored menu.sh.
+# TK_MENU_DRYRUN=1 prints the argument vector for test assertions.
 display_menu() {
-    local title="$1"
-    local options="$2"
-    eval "tmux display-menu -T '$title' $options"
+    tk_menu_show
 }
 
 # Show worktree list menu with pagination, optional filter, and optional recent sort
@@ -589,10 +601,7 @@ show_worktree_menu() {
     local worktree_items
     worktree_items=$(echo "$combined_output" | tail -n +2)
 
-    local nav_options
-    nav_options=$(generate_nav_options "$page" "$total_pages" "show_worktree_menu" "$filter" "$sort_recent")
-
-    debug_log "show_worktree_menu: total_pages=$total_pages sort_recent=$sort_recent items_count=$(echo "$worktree_items" | grep -c '\"' || echo 0)"
+    debug_log "show_worktree_menu: total_pages=$total_pages sort_recent=$sort_recent"
 
     # Build title with state indicators
     local title="Worktrees (Page $page/$total_pages)"
@@ -603,31 +612,39 @@ show_worktree_menu() {
     fi
     [ -n "$filter" ] && title="$title - Filter: '$filter'"
 
+    tk_menu_reset
+    tk_menu_title "$title"
+
     # Sort toggle: label shows the mode you'll switch TO
-    local recent_option=""
     if [ "$sort_recent" = "1" ]; then
-        recent_option="\"Alphabetical\" \"r\" \"run-shell \\\"'$script_path' show_worktree_menu 1 '$filter' 0\\\"\" "
+        tk_menu_item "Alphabetical" "r" "$(tk_menu_cmd "$script_path" show_worktree_menu 1 "$filter" 0)"
     else
-        recent_option="\"Latest first\" \"r\" \"run-shell \\\"'$script_path' show_worktree_menu 1 '$filter' 1\\\"\" "
+        tk_menu_item "Latest first" "r" "$(tk_menu_cmd "$script_path" show_worktree_menu 1 "$filter" 1)"
     fi
 
     # Filter option (preserves sort_recent state)
-    local filter_option="\"Filter\" \"$KEY_FILTER\" \"command-prompt -T search -p 'Filter pattern:' 'run-shell \\\"'$script_path' show_worktree_menu 1 '\\''%1'\\'' $sort_recent\\\"'\""
+    tk_menu_item "Filter" "$KEY_FILTER" "command-prompt -T search -p 'Filter pattern:' 'run-shell '\''$script_path'\'' show_worktree_menu 1 '\''%1'\'' $sort_recent'"
 
     # Clear filter option (only when filter active, preserves sort_recent)
-    local clear_option=""
     if [ -n "$filter" ]; then
-        clear_option="\"Clear filter\" \"$KEY_CLEAR_FILTER\" \"run-shell \\\"'$script_path' show_worktree_menu 1 '' $sort_recent\\\"\""
+        tk_menu_item "Clear filter" "$KEY_CLEAR_FILTER" "$(tk_menu_cmd "$script_path" show_worktree_menu 1 '' $sort_recent)"
     fi
 
+    # Parse TSV worktree items
     if [ -n "$worktree_items" ]; then
-        local all_options="$recent_option$filter_option $clear_option $worktree_items $nav_options"
+        while IFS=$'\t' read -r label branch full_path; do
+            [ -z "$label" ] && continue
+            tk_menu_item "$label" "" "display-message 'Switching...' ; $(tk_menu_cmd "$script_path" switch_worktree "$branch" "$full_path")"
+        done <<< "$worktree_items"
     else
         debug_log "show_worktree_menu: no worktrees found"
-        local all_options="$recent_option$filter_option $clear_option \"(No worktrees found)\" \"\" \"\" $nav_options"
+        tk_menu_text "(No worktrees found)"
     fi
 
-    display_menu "$title" "$all_options"
+    # Navigation items
+    _add_nav_items "$page" "$total_pages" "show_worktree_menu" "$filter" "$sort_recent"
+
+    tk_menu_show
 }
 
 # Copy gitignored files from primary worktree to a new worktree
@@ -1048,9 +1065,6 @@ show_add_worktree_menu() {
     local branch_items
     branch_items=$(echo "$combined_output" | tail -n +2)
 
-    local nav_options
-    nav_options=$(generate_nav_options "$page" "$total_pages" "show_add_worktree_menu" "$filter" "$include_remotes")
-
     debug_log "show_add_worktree_menu: total_pages=$total_pages include_remotes=$include_remotes"
 
     # Build title with filter and remote indicator
@@ -1058,29 +1072,48 @@ show_add_worktree_menu() {
     [ "$include_remotes" = "1" ] && title="$title [+remote]"
     [ -n "$filter" ] && title="$title - Filter: '$filter'"
 
-    # New branch option
-    local new_option="\"New\" \"$KEY_NEW\" \"command-prompt -p 'New branch name:' 'run-shell \\\"'$script_path' create_new_worktree %1\\\"'\""
+    tk_menu_reset
+    tk_menu_title "$title"
 
-    # Fetch remote option - fetches and refreshes menu with remotes included
-    local fetch_option="\"Fetch remote\" \"$KEY_FETCH\" \"run-shell \\\"'$script_path' fetch_remote_branches; '$script_path' show_add_worktree_menu 1 '$filter' 1\\\"\""
+    # New branch option
+    tk_menu_item "New" "$KEY_NEW" "command-prompt -p 'New branch name:' 'run-shell '\''$script_path'\'' create_new_worktree %1'"
+
+    # Fetch remote option
+    tk_menu_item "Fetch remote" "$KEY_FETCH" "$(tk_menu_cmd "$script_path" fetch_remote_branches) ; $(tk_menu_cmd "$script_path" show_add_worktree_menu 1 "$filter" 1)"
 
     # Filter option (always present)
-    local filter_option="\"Filter\" \"$KEY_FILTER\" \"command-prompt -T search -p 'Filter pattern:' 'run-shell \\\"'$script_path' show_add_worktree_menu 1 '\\''%1'\\'' $include_remotes\\\"'\""
+    tk_menu_item "Filter" "$KEY_FILTER" "command-prompt -T search -p 'Filter pattern:' 'run-shell '\''$script_path'\'' show_add_worktree_menu 1 '\''%1'\'' $include_remotes'"
 
     # Clear filter option (only when filter active)
-    local clear_option=""
     if [ -n "$filter" ]; then
-        clear_option="\"Clear filter\" \"$KEY_CLEAR_FILTER\" \"run-shell \\\"'$script_path' show_add_worktree_menu 1 '' $include_remotes\\\"\""
+        tk_menu_item "Clear filter" "$KEY_CLEAR_FILTER" "$(tk_menu_cmd "$script_path" show_add_worktree_menu 1 '' $include_remotes)"
     fi
 
+    # Parse TSV branch items
     if [ -n "$branch_items" ]; then
-        local all_options="$new_option $fetch_option $filter_option $clear_option $branch_items $nav_options"
+        while IFS=$'\t' read -r row_type label branch extra; do
+            [ -z "$row_type" ] && continue
+            case "$row_type" in
+                active)
+                    tk_menu_item "$label" "" "display-message 'Switching...' ; $(tk_menu_cmd "$script_path" switch_worktree "$branch" "$extra")"
+                    ;;
+                local)
+                    tk_menu_item "$label" "" "display-message 'Creating worktree...' ; $(tk_menu_cmd "$script_path" add_worktree "$branch")"
+                    ;;
+                remote)
+                    tk_menu_item "$label" "" "display-message 'Creating worktree...' ; $(tk_menu_cmd "$script_path" add_worktree "$branch" "$extra")"
+                    ;;
+            esac
+        done <<< "$branch_items"
     else
         debug_log "show_add_worktree_menu: no branches found"
-        local all_options="$new_option $fetch_option $filter_option $clear_option \"(No branches available)\" \"\" \"\" $nav_options"
+        tk_menu_text "(No branches available)"
     fi
 
-    display_menu "$title" "$all_options"
+    # Navigation items
+    _add_nav_items "$page" "$total_pages" "show_add_worktree_menu" "$filter" "$include_remotes"
+
+    tk_menu_show
 }
 
 # Show remove worktree menu with pagination and optional filter
@@ -1101,42 +1134,45 @@ show_remove_worktree_menu() {
     local worktree_items
     worktree_items=$(echo "$combined_output" | tail -n +2)
 
-    local nav_options
-    nav_options=$(generate_nav_options "$page" "$total_pages" "show_remove_worktree_menu" "$filter")
-
     debug_log "show_remove_worktree_menu: total_pages=$total_pages"
 
     # Build title with filter indicator
     local title="Remove Worktree (Page $page/$total_pages)"
     [ -n "$filter" ] && title="$title - Filter: '$filter'"
 
-    # Bulk-remove entry point (hidden when count=0). Always filtered against the
-    # full worktree set (not the page filter) so it reflects what the submenu
-    # will show.
-    local bulk_option=""
+    tk_menu_reset
+    tk_menu_title "$title"
+
+    # Bulk-remove entry point (hidden when count=0)
     local stale_count
     stale_count=$(get_stale_worktree_count "$MAX_AGE_DAYS")
     if [ "$stale_count" -gt 0 ]; then
-        bulk_option="\"Remove older than ${MAX_AGE_DAYS}d ($stale_count)\" \"X\" \"display-message \\\"Loading...\\\" ; run-shell \\\"'$script_path' show_bulk_remove_preview_menu $MAX_AGE_DAYS\\\"\" "
+        tk_menu_item "Remove older than ${MAX_AGE_DAYS}d ($stale_count)" "X" "display-message 'Loading...' ; $(tk_menu_cmd "$script_path" show_bulk_remove_preview_menu "$MAX_AGE_DAYS")"
     fi
 
     # Filter option (always present)
-    local filter_option="\"Filter\" \"$KEY_FILTER\" \"command-prompt -T search -p 'Filter pattern:' 'run-shell \\\"'$script_path' show_remove_worktree_menu 1 '\\''%1'\\''\\\"'\""
+    tk_menu_item "Filter" "$KEY_FILTER" "command-prompt -T search -p 'Filter pattern:' 'run-shell '\''$script_path'\'' show_remove_worktree_menu 1 '\''%1'\'''"
 
     # Clear filter option (only when filter active)
-    local clear_option=""
     if [ -n "$filter" ]; then
-        clear_option="\"Clear filter\" \"$KEY_CLEAR_FILTER\" \"run-shell \\\"'$script_path' show_remove_worktree_menu 1\\\"\""
+        tk_menu_item "Clear filter" "$KEY_CLEAR_FILTER" "$(tk_menu_cmd "$script_path" show_remove_worktree_menu 1)"
     fi
 
+    # Parse TSV removable items
     if [ -n "$worktree_items" ]; then
-        local all_options="$bulk_option$filter_option $clear_option $worktree_items $nav_options"
+        while IFS=$'\t' read -r label full_path branch session_name current_page; do
+            [ -z "$label" ] && continue
+            tk_menu_item "$label" "" "display-message 'Removing worktree...' ; $(tk_menu_cmd "$script_path" remove_worktree "$full_path" "$branch" "$session_name" "$current_page")"
+        done <<< "$worktree_items"
     else
         debug_log "show_remove_worktree_menu: no removable worktrees found"
-        local all_options="$bulk_option$filter_option $clear_option \"(No removable worktrees found)\" \"\" \"\" $nav_options"
+        tk_menu_text "(No removable worktrees found)"
     fi
 
-    display_menu "$title" "$all_options"
+    # Navigation items
+    _add_nav_items "$page" "$total_pages" "show_remove_worktree_menu" "$filter"
+
+    tk_menu_show
 }
 
 # Show preview menu for bulk-remove of worktrees older than threshold_days.
@@ -1158,32 +1194,39 @@ show_bulk_remove_preview_menu() {
     items=$(echo "$combined_output" | tail -n +2)
     count=$(get_stale_worktree_count "$threshold_days" "$filter")
 
-    local nav_options
-    nav_options=$(generate_nav_options "$page" "$total_pages" "show_bulk_remove_preview_menu" "$filter" "$threshold_days")
-
     local title="Stale Worktrees >${threshold_days}d (Page $page/$total_pages)"
     [ -n "$filter" ] && title="$title - Filter: '$filter'"
 
-    local remove_all_option=""
+    tk_menu_reset
+    tk_menu_title "$title"
+
+    # Remove all option
     if [ "$count" -gt 0 ]; then
-        remove_all_option="\"Remove all $count\" \"X\" \"command-prompt -p 'Remove $count worktrees older than ${threshold_days}d? Type yes:' 'run-shell \\\"'$script_path' bulk_remove_worktrees $threshold_days '\\''%1'\\''\\\"'\" "
+        tk_menu_item "Remove all $count" "X" "command-prompt -p 'Remove $count worktrees older than ${threshold_days}d? Type yes:' 'run-shell '\''$script_path'\'' bulk_remove_worktrees $threshold_days '\''%1'\'''"
     fi
 
-    local filter_option="\"Filter\" \"$KEY_FILTER\" \"command-prompt -T search -p 'Filter pattern:' 'run-shell \\\"'$script_path' show_bulk_remove_preview_menu $threshold_days 1 '\\''%1'\\''\\\"'\""
+    # Filter option
+    tk_menu_item "Filter" "$KEY_FILTER" "command-prompt -T search -p 'Filter pattern:' 'run-shell '\''$script_path'\'' show_bulk_remove_preview_menu $threshold_days 1 '\''%1'\'''"
 
-    local clear_option=""
+    # Clear filter option
     if [ -n "$filter" ]; then
-        clear_option="\"Clear filter\" \"$KEY_CLEAR_FILTER\" \"run-shell \\\"'$script_path' show_bulk_remove_preview_menu $threshold_days 1\\\"\""
+        tk_menu_item "Clear filter" "$KEY_CLEAR_FILTER" "$(tk_menu_cmd "$script_path" show_bulk_remove_preview_menu "$threshold_days" 1)"
     fi
 
-    local all_options
+    # Parse TSV stale items
     if [ -n "$items" ] && [ "$count" -gt 0 ]; then
-        all_options="$remove_all_option$filter_option $clear_option $items $nav_options"
+        while IFS=$'\t' read -r label full_path branch session_name current_page; do
+            [ -z "$label" ] && continue
+            tk_menu_item "$label" "" "display-message 'Removing worktree...' ; $(tk_menu_cmd "$script_path" remove_worktree "$full_path" "$branch" "$session_name" "$current_page")"
+        done <<< "$items"
     else
-        all_options="$filter_option $clear_option \"(No stale worktrees found)\" \"\" \"\" $nav_options"
+        tk_menu_text "(No stale worktrees found)"
     fi
 
-    display_menu "$title" "$all_options"
+    # Navigation items
+    _add_nav_items "$page" "$total_pages" "show_bulk_remove_preview_menu" "$filter" "$threshold_days"
+
+    tk_menu_show
 }
 
 # Bulk-remove all worktrees older than threshold_days. Called from the confirm prompt.
@@ -1356,18 +1399,20 @@ show_options_menu() {
     local dp
     dp=$(display_path "$WORKTREE_BASE")
 
-    local options=""
-    options="\"Copy ignored: $COPY_IGNORED\" \"\" \"run-shell \\\"'$script_path' set_option @worktree-copy-ignored $next_copy_ignored\\\"\" "
-    options="$options\"Debug: $DEBUG\" \"\" \"run-shell \\\"'$script_path' set_option @worktree-debug $next_debug\\\"\" "
-    options="$options\"Items/page: $ITEMS_PER_PAGE\" \"\" \"run-shell \\\"'$script_path' set_option @worktree-items-per-page $next_items\\\"\" "
-    options="$options\"Sort recent: ${SORT_RECENT_DEFAULT:-on}\" \"\" \"run-shell \\\"'$script_path' set_option @worktree-sort-recent-default $next_sort_recent\\\"\" "
-    options="$options\"Fetch prune: $FETCH_PRUNE\" \"\" \"run-shell \\\"'$script_path' set_option @worktree-fetch-prune $next_fetch_prune\\\"\" "
-    options="$options\"Fetch timeout: ${FETCH_TIMEOUT}s\" \"\" \"run-shell \\\"'$script_path' set_option @worktree-fetch-timeout $next_timeout\\\"\" "
-    options="$options\"Stale after: ${MAX_AGE_DAYS}d\" \"\" \"run-shell \\\"'$script_path' set_option @worktree-max-age-days $next_age\\\"\" "
-    options="$options\"Path: $dp\" \"\" \"command-prompt -I '$WORKTREE_BASE' -p 'Worktree path:' 'run-shell \\\"'\\'''$script_path' set_option @worktree-path %1'\\''\\\"'\" "
-    options="$options\"← Back\" \"$KEY_BACK\" \"run-shell \\\"'$script_path' tmux_worktrees_main\\\"\""
+    tk_menu_reset
+    tk_menu_title "Options"
 
-    display_menu "Options" "$options"
+    tk_menu_item "Copy ignored: $COPY_IGNORED" "" "$(tk_menu_cmd "$script_path" set_option @worktree-copy-ignored "$next_copy_ignored")"
+    tk_menu_item "Debug: $DEBUG" "" "$(tk_menu_cmd "$script_path" set_option @worktree-debug "$next_debug")"
+    tk_menu_item "Items/page: $ITEMS_PER_PAGE" "" "$(tk_menu_cmd "$script_path" set_option @worktree-items-per-page "$next_items")"
+    tk_menu_item "Sort recent: ${SORT_RECENT_DEFAULT:-on}" "" "$(tk_menu_cmd "$script_path" set_option @worktree-sort-recent-default "$next_sort_recent")"
+    tk_menu_item "Fetch prune: $FETCH_PRUNE" "" "$(tk_menu_cmd "$script_path" set_option @worktree-fetch-prune "$next_fetch_prune")"
+    tk_menu_item "Fetch timeout: ${FETCH_TIMEOUT}s" "" "$(tk_menu_cmd "$script_path" set_option @worktree-fetch-timeout "$next_timeout")"
+    tk_menu_item "Stale after: ${MAX_AGE_DAYS}d" "" "$(tk_menu_cmd "$script_path" set_option @worktree-max-age-days "$next_age")"
+    tk_menu_item "Path: $dp" "" "command-prompt -I '$WORKTREE_BASE' -p 'Worktree path:' 'run-shell '\''$script_path'\'' set_option @worktree-path %1'"
+    tk_menu_item "← Back" "$KEY_BACK" "$(tk_menu_cmd "$script_path" tmux_worktrees_main)"
+
+    tk_menu_show
 }
 
 # ==============================================================================
@@ -1392,13 +1437,16 @@ tmux_worktrees_main() {
     adopt_current_session
 
     local script_path="$SCRIPT_DIR/worktree_manager.sh"
-    local options='"List" "'"$KEY_LIST"'" "display-message \"Loading worktrees...\" ; run-shell \"'"'"$script_path"'"' show_worktree_menu\"" \
-    "Add" "'"$KEY_ADD"'" "display-message \"Loading branches...\" ; run-shell \"'"'"$script_path"'"' show_add_worktree_menu\"" \
-    "Remove" "'"$KEY_REMOVE"'" "display-message \"Loading...\" ; run-shell \"'"'"$script_path"'"' show_remove_worktree_menu\"" \
-    "Options" "'"$KEY_OPTIONS"'" "run-shell \"'"'"$script_path"'"' show_options_menu\"" \
-    "Quit" "'"$KEY_QUIT"'" ""'
 
-    display_menu "Git Worktrees" "$options"
+    tk_menu_reset
+    tk_menu_title "Git Worktrees"
+    tk_menu_item "List" "$KEY_LIST" "display-message 'Loading worktrees...' ; $(tk_menu_cmd "$script_path" show_worktree_menu)"
+    tk_menu_item "Add" "$KEY_ADD" "display-message 'Loading branches...' ; $(tk_menu_cmd "$script_path" show_add_worktree_menu)"
+    tk_menu_item "Remove" "$KEY_REMOVE" "display-message 'Loading...' ; $(tk_menu_cmd "$script_path" show_remove_worktree_menu)"
+    tk_menu_item "Options" "$KEY_OPTIONS" "$(tk_menu_cmd "$script_path" show_options_menu)"
+    tk_menu_item "Quit" "$KEY_QUIT" ""
+
+    tk_menu_show
 }
 
 # ==============================================================================

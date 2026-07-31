@@ -36,9 +36,10 @@ setup() {
     reload_config
     export TMUX_WORKTREE_RECENT_FILE="$WORKTREE_BASE/.recent-test.log"
 
-    display_menu() {
-        CAPTURED_MENU_TITLE="$1"
-        CAPTURED_MENU_OPTIONS="$2"
+    tk_menu_show() {
+        CAPTURED_MENU_TITLE="${TK_MENU_TITLE:-}"
+        CAPTURED_MENU_OPTIONS="${TK_MENU_ARGS[*]:-}"
+        TK_MENU_ARGS=()
     }
 
     tmux() {
@@ -207,7 +208,9 @@ _cleanup_worktrees() {
 
     show_bulk_remove_preview_menu 30
 
-    assert_contains "$CAPTURED_MENU_OPTIONS" "bulk_remove_worktrees 30"
+    # tk_menu_cmd produces: 'bulk_remove_worktrees' '30'
+    assert_contains "$CAPTURED_MENU_OPTIONS" "bulk_remove_worktrees"
+    assert_contains "$CAPTURED_MENU_OPTIONS" "30"
     assert_contains "$CAPTURED_MENU_OPTIONS" "Type yes"
 
     _cleanup_worktrees
@@ -260,7 +263,8 @@ _cleanup_worktrees() {
 
 @test "Options menu: Stale after cycle dispatches set_option" {
     show_options_menu
-    assert_contains "$CAPTURED_MENU_OPTIONS" "set_option @worktree-max-age-days"
+    assert_contains "$CAPTURED_MENU_OPTIONS" "set_option"
+    assert_contains "$CAPTURED_MENU_OPTIONS" "@worktree-max-age-days"
 }
 
 @test "Options menu: Stale after shows current value" {
@@ -273,7 +277,10 @@ _cleanup_worktrees() {
     tmux_set_option "@worktree-max-age-days" "7"
     tmux_set_option "@worktree-max-age-choices" "7,14,21"
     show_options_menu
-    assert_contains "$CAPTURED_MENU_OPTIONS" "set_option @worktree-max-age-days 14"
+    # tk_menu_cmd single-quotes args: 'set_option' '@worktree-max-age-days' '14'
+    assert_contains "$CAPTURED_MENU_OPTIONS" "set_option"
+    assert_contains "$CAPTURED_MENU_OPTIONS" "@worktree-max-age-days"
+    assert_contains "$CAPTURED_MENU_OPTIONS" "'14'"
 }
 
 # ==============================================================================

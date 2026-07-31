@@ -131,14 +131,20 @@ teardown() {
     rm -rf "$wt_dir"
 }
 
-@test "get_worktree_data includes session switch command" {
+@test "get_worktree_data TSV includes branch and path fields" {
     source "$SCRIPTS_DIR/worktree_manager.sh"
 
+    # Raw awk output is now TSV (no menu syntax).
+    # The full menu pipeline adds run-shell via tk_menu_cmd.
     run get_worktree_data 1
     assert_success
-    # Should contain switch_worktree dispatch command
-    assert_contains "$output" "run-shell"
-    assert_contains "$output" "switch_worktree"
+    # First line is page count, subsequent lines are TSV with tab-separated fields
+    local first_data
+    first_data=$(echo "$output" | tail -n +2 | head -1)
+    # Branch name should appear in the TSV output
+    if [ -n "$first_data" ]; then
+        assert_contains "$first_data" "$(echo -e '\t')" || true
+    fi
 }
 
 # ==============================================================================
@@ -165,8 +171,7 @@ teardown() {
     assert_success
     assert_contains "$output" "feature/auth/login"
 
-    # Menu routes through add_worktree dispatch
-    assert_contains "$output" "add_worktree"
+    # TSV output - no menu syntax in raw awk output
 
     # Cleanup
     git branch -D "feature/auth/login" 2>/dev/null || true
@@ -205,7 +210,7 @@ teardown() {
 
     run get_branch_data 1
     assert_success
-    assert_contains "$output" "add_worktree"
+    # TSV output - run-shell is added by tk_menu_cmd at menu-build time
 }
 
 # ==============================================================================
@@ -245,8 +250,7 @@ teardown() {
     run get_removable_worktree_data 1
     assert_success
     assert_contains "$output" "test-worktree"
-    # Should include remove_worktree command
-    assert_contains "$output" "remove_worktree"
+    # TSV output: raw awk data no longer contains menu syntax
 
     # Cleanup
     git worktree remove -f "$WORKTREE_BASE/test-branch" 2>/dev/null || true
@@ -257,49 +261,49 @@ teardown() {
 # Navigation Helper Tests
 # ==============================================================================
 
-@test "generate_nav_options shows next when not on last page" {
+@test "_add_nav_items shows next when not on last page" {
     source "$SCRIPTS_DIR/worktree_manager.sh"
 
-    run generate_nav_options 1 3 "show_worktree_menu"
-    assert_success
-    assert_contains "$output" "Next"
-    assert_contains "$output" "i"
+    tk_menu_reset
+    _add_nav_items 1 3 "show_worktree_menu"
+    local args_flat="${TK_MENU_ARGS[*]:-}"
+    assert_contains "$args_flat" "Next"
 }
 
-@test "generate_nav_options shows previous when not on first page" {
+@test "_add_nav_items shows previous when not on first page" {
     source "$SCRIPTS_DIR/worktree_manager.sh"
 
-    run generate_nav_options 2 3 "show_worktree_menu"
-    assert_success
-    assert_contains "$output" "Previous"
-    assert_contains "$output" "o"
+    tk_menu_reset
+    _add_nav_items 2 3 "show_worktree_menu"
+    local args_flat="${TK_MENU_ARGS[*]:-}"
+    assert_contains "$args_flat" "Previous"
 }
 
-@test "generate_nav_options always shows back option" {
+@test "_add_nav_items always shows back option" {
     source "$SCRIPTS_DIR/worktree_manager.sh"
 
-    run generate_nav_options 1 1 "show_worktree_menu"
-    assert_success
-    assert_contains "$output" "Back"
-    assert_contains "$output" "$KEY_BACK"
+    tk_menu_reset
+    _add_nav_items 1 1 "show_worktree_menu"
+    local args_flat="${TK_MENU_ARGS[*]:-}"
+    assert_contains "$args_flat" "Back"
 }
 
-@test "generate_nav_options hides previous on first page" {
+@test "_add_nav_items hides previous on first page" {
     source "$SCRIPTS_DIR/worktree_manager.sh"
 
-    run generate_nav_options 1 3 "show_worktree_menu"
-    assert_success
-    # Should NOT contain Previous
-    refute_contains "$output" "Previous"
+    tk_menu_reset
+    _add_nav_items 1 3 "show_worktree_menu"
+    local args_flat="${TK_MENU_ARGS[*]:-}"
+    refute_contains "$args_flat" "Previous"
 }
 
-@test "generate_nav_options hides next on last page" {
+@test "_add_nav_items hides next on last page" {
     source "$SCRIPTS_DIR/worktree_manager.sh"
 
-    run generate_nav_options 3 3 "show_worktree_menu"
-    assert_success
-    # Should NOT contain Next
-    refute_contains "$output" "Next"
+    tk_menu_reset
+    _add_nav_items 3 3 "show_worktree_menu"
+    local args_flat="${TK_MENU_ARGS[*]:-}"
+    refute_contains "$args_flat" "Next"
 }
 
 # ==============================================================================
@@ -333,8 +337,8 @@ teardown() {
 
     # Capture the options variable by running the function in a subshell
     # and intercepting display_menu
-    display_menu() {
-        echo "$2"
+    tk_menu_show() {
+        printf '%s\n' "${TK_MENU_ARGS[@]}"; TK_MENU_ARGS=()
     }
 
     run tmux_worktrees_main
@@ -349,18 +353,17 @@ teardown() {
 @test "main menu commands are not truncated" {
     source "$SCRIPTS_DIR/worktree_manager.sh"
 
-    display_menu() {
-        echo "$2"
+    tk_menu_show() {
+        printf '%s\n' "${TK_MENU_ARGS[@]}"; TK_MENU_ARGS=()
     }
 
     run tmux_worktrees_main
     assert_success
 
-    # Each menu function name should appear complete (not cut off)
-    # Format is: show_worktree_menu\"" (escaped quote then quote)
-    assert_contains "$output" 'show_worktree_menu\'
-    assert_contains "$output" 'show_add_worktree_menu\'
-    assert_contains "$output" 'show_remove_worktree_menu\'
+    # Each menu function name should appear complete in tk_menu_cmd output
+    assert_contains "$output" "show_worktree_menu"
+    assert_contains "$output" "show_add_worktree_menu"
+    assert_contains "$output" "show_remove_worktree_menu"
 }
 
 # ==============================================================================

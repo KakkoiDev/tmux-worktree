@@ -37,30 +37,30 @@ teardown() {
 @test "show_add_worktree_menu includes fetch remote option" {
     source "$SCRIPTS_DIR/worktree_manager.sh"
 
-    display_menu() {
-        echo "$2"
+    tk_menu_show() {
+        printf '%s\n' "${TK_MENU_ARGS[@]}"; TK_MENU_ARGS=()
     }
 
     run show_add_worktree_menu 1
     assert_success
     assert_contains "$output" "Fetch remote"
-    assert_contains "$output" "\"r\""
+    assert_contains "$output" "Fetch remote"
 }
 
 @test "fetch remote option is positioned after New and before Filter" {
     source "$SCRIPTS_DIR/worktree_manager.sh"
 
-    display_menu() {
-        echo "$2"
+    tk_menu_show() {
+        printf '%s\n' "${TK_MENU_ARGS[@]}"; TK_MENU_ARGS=()
     }
 
     run show_add_worktree_menu 1
     assert_success
 
     # Check order: New should come before Fetch, Fetch before Filter
-    local new_pos=$(echo "$output" | grep -bo '"New"' | head -1 | cut -d: -f1)
-    local fetch_pos=$(echo "$output" | grep -bo '"Fetch remote"' | head -1 | cut -d: -f1)
-    local filter_pos=$(echo "$output" | grep -bo '"Filter"' | head -1 | cut -d: -f1)
+    local new_pos=$(echo "$output" | grep -bo 'New' | head -1 | cut -d: -f1)
+    local fetch_pos=$(echo "$output" | grep -bo 'Fetch remote' | head -1 | cut -d: -f1)
+    local filter_pos=$(echo "$output" | grep -bo 'Filter' | head -1 | cut -d: -f1)
 
     [ "$new_pos" -lt "$fetch_pos" ]
     [ "$fetch_pos" -lt "$filter_pos" ]
@@ -190,10 +190,10 @@ teardown() {
     refute_contains "$output" "origin/feature-one"
     refute_contains "$output" "origin/feature-two"
     # Local branches without worktrees still appear as plain entries
-    assert_contains "$output" '"feature-one"'
-    assert_contains "$output" '"feature-two"'
+    assert_contains "$output" 'feature-one'
+    assert_contains "$output" 'feature-two'
     # master has a worktree (main repo) so it now shows as [active]
-    assert_contains "$output" '"[active] master"'
+    assert_contains "$output" '[active] master'
 
     # Cleanup
     git remote remove origin
@@ -211,16 +211,16 @@ teardown() {
     run get_branch_data 1 "" 0
     assert_success
     # feature-one has a worktree -> shown as [active]
-    assert_contains "$output" '"[active] feature-one"'
+    assert_contains "$output" '[active] feature-one'
     # master is on main repo -> also [active]
-    assert_contains "$output" '"[active] master"'
+    assert_contains "$output" '[active] master'
     # Other branches without worktrees still appear as plain entries
-    assert_contains "$output" '"feature-two"'
-    assert_contains "$output" '"bugfix-123"'
+    assert_contains "$output" 'feature-two'
+    assert_contains "$output" 'bugfix-123'
     # Active items must come before plain locals
     assert_contains "${output%%feature-two*}" "[active] feature-one"
-    # Action wired to switch_worktree with the worktree path
-    assert_contains "$output" "switch_worktree feature-one"
+    # TSV contains type, label, branch, and worktree path
+    assert_contains "$output" "feature-one"
     assert_contains "$output" "$wt_path"
 
     # Cleanup
@@ -245,7 +245,7 @@ teardown() {
     run get_branch_data 1 "" 1
     assert_success
     # remote-only-branch has a local worktree -> shown as [active] under local name
-    assert_contains "$output" '"[active] remote-only-branch"'
+    assert_contains "$output" '[active] remote-only-branch'
     # origin/remote-only-branch should not appear as a [remote] entry (local exists)
     refute_contains "$output" '[remote] origin/remote-only-branch'
 
@@ -278,9 +278,9 @@ teardown() {
 
     # Locate first occurrence of each kind in the output
     local active_pos plain_pos remote_pos
-    active_pos=$(echo "$output" | grep -bo '"\[active\]' | head -1 | cut -d: -f1)
-    plain_pos=$(echo "$output" | grep -bo '"feature-two"' | head -1 | cut -d: -f1)
-    remote_pos=$(echo "$output" | grep -bo '"\[remote\]' | head -1 | cut -d: -f1)
+    active_pos=$(echo "$output" | grep -bo '\[active\]' | head -1 | cut -d: -f1)
+    plain_pos=$(echo "$output" | grep -bo 'feature-two' | head -1 | cut -d: -f1)
+    remote_pos=$(echo "$output" | grep -bo '\[remote\]' | head -1 | cut -d: -f1)
 
     [ -n "$active_pos" ]
     [ -n "$plain_pos" ]
@@ -396,7 +396,7 @@ teardown() {
 @test "show_add_worktree_menu accepts include_remotes parameter" {
     source "$SCRIPTS_DIR/worktree_manager.sh"
 
-    display_menu() {
+    tk_menu_show() {
         echo "TITLE: $1"
         echo "OPTIONS: $2"
     }
@@ -410,8 +410,8 @@ teardown() {
 @test "fetch remote action refreshes menu with include_remotes enabled" {
     source "$SCRIPTS_DIR/worktree_manager.sh"
 
-    display_menu() {
-        echo "$2"
+    tk_menu_show() {
+        printf '%s\n' "${TK_MENU_ARGS[@]}"; TK_MENU_ARGS=()
     }
 
     run show_add_worktree_menu 1

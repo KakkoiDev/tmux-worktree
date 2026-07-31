@@ -123,7 +123,7 @@ teardown() {
     DEBUG="on"
 
     # Mock display_menu to prevent real menu
-    display_menu() { echo "MENU_CALLED"; }
+    tk_menu_show() { echo "MENU_CALLED"; TK_MENU_ARGS=(); }
 
     run tmux_worktrees_main
     assert_success
@@ -185,7 +185,7 @@ teardown() {
     cd "$TEST_REPO_DIR"
 
     # Mock display_menu to prevent real menu
-    display_menu() { echo "MENU_CALLED"; }
+    tk_menu_show() { echo "MENU_CALLED"; TK_MENU_ARGS=(); }
 
     run tmux_worktrees_main
     assert_success
@@ -199,25 +199,20 @@ teardown() {
     run get_branch_data 1 "" 0
     assert_success
 
-    # Output should route through add_worktree (CWD is resolved by main())
-    assert_contains "$output" "add_worktree"
-    assert_contains "$output" "worktree_manager.sh"
+    # TSV output contains branch name; add_worktree dispatch is now
+    # built by tk_menu_cmd at the bash menu level, not in awk.
+    assert_contains "$output" "test-cwd-branch"
 }
 
-@test "get_branch_data includes branch name in dispatch" {
+@test "get_branch_data includes branch name in TSV" {
     cd "$TEST_REPO_DIR"
     git branch test-cwd-verify
 
     local output
     output=$(get_branch_data 1 "" 0)
 
-    # The dispatch command should include the branch name.
-    #
-    # A glob, not a substring: the claim is that add_worktree appears *before*
-    # test-cwd-verify, so two assert_contains calls would drop the ordering. The
-    # quotes come off because neither run contains a glob metacharacter, and
-    # assert_match needs the pattern unquoted at the comparison.
-    assert_match "$output" '*add_worktree*test-cwd-verify*'
+    # TSV output: branch name should appear in the data
+    assert_contains "$output" "test-cwd-verify"
 }
 
 @test "main resolves pane CWD before dispatching commands" {
@@ -236,7 +231,7 @@ teardown() {
     export -f tmux
 
     # Mock display_menu to capture that we got past the git check
-    display_menu() { echo "MENU_OK"; }
+    tk_menu_show() { echo "MENU_OK"; TK_MENU_ARGS=(); }
 
     cd "$start_dir"
 

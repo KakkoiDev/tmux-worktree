@@ -30,12 +30,11 @@ setup() {
     # CRITICAL: Set WORKTREE_BASE AFTER load_config because load_config overwrites it
     init_test_worktree_base
 
-    # IMPORTANT: Mock display_menu to prevent opening real tmux menus.
-    # Without this mock, tmux display-menu would block test execution
-    # and require manual Escape key press to continue.
-    # See CONTRIBUTING.md "Testing Menu Functions" for details.
-    display_menu() {
-        CAPTURED_MENU_OPTIONS="$2"
+    # Capture tk_menu_show args (TK_MENU_ARGS) as a flat string for assertions.
+    # The menu functions now use tk_menu_* API from vendored lib/menu.sh.
+    tk_menu_show() {
+        CAPTURED_MENU_OPTIONS="${TK_MENU_ARGS[*]:-}"
+        TK_MENU_ARGS=()
     }
 }
 
@@ -50,27 +49,27 @@ teardown() {
 
 @test "main menu generates List option" {
     tmux_worktrees_main
-    assert_contains "$CAPTURED_MENU_OPTIONS" '"List"'
+    assert_contains "$CAPTURED_MENU_OPTIONS" 'List'
 }
 
 @test "main menu generates Add option" {
     tmux_worktrees_main
-    assert_contains "$CAPTURED_MENU_OPTIONS" '"Add"'
+    assert_contains "$CAPTURED_MENU_OPTIONS" 'Add'
 }
 
 @test "main menu generates Remove option" {
     tmux_worktrees_main
-    assert_contains "$CAPTURED_MENU_OPTIONS" '"Remove"'
+    assert_contains "$CAPTURED_MENU_OPTIONS" 'Remove'
 }
 
 @test "main menu generates Options option" {
     tmux_worktrees_main
-    assert_contains "$CAPTURED_MENU_OPTIONS" '"Options"'
+    assert_contains "$CAPTURED_MENU_OPTIONS" 'Options'
 }
 
 @test "main menu generates Quit option" {
     tmux_worktrees_main
-    assert_contains "$CAPTURED_MENU_OPTIONS" '"Quit"'
+    assert_contains "$CAPTURED_MENU_OPTIONS" 'Quit'
 }
 
 # ==============================================================================
@@ -79,7 +78,7 @@ teardown() {
 
 @test "list worktree menu generates Filter option" {
     show_worktree_menu 1
-    assert_contains "$CAPTURED_MENU_OPTIONS" '"Filter"'
+    assert_contains "$CAPTURED_MENU_OPTIONS" 'Filter'
 }
 
 @test "list worktree menu generates Back option" {
@@ -123,12 +122,12 @@ teardown() {
 
 @test "add worktree menu generates New option" {
     show_add_worktree_menu 1
-    assert_contains "$CAPTURED_MENU_OPTIONS" '"New"'
+    assert_contains "$CAPTURED_MENU_OPTIONS" 'New'
 }
 
 @test "add worktree menu generates Fetch remote option" {
     show_add_worktree_menu 1
-    assert_contains "$CAPTURED_MENU_OPTIONS" '"Fetch remote"'
+    assert_contains "$CAPTURED_MENU_OPTIONS" 'Fetch remote'
 }
 
 @test "add worktree menu shows existing branches" {
@@ -144,7 +143,7 @@ teardown() {
 
 @test "remove worktree menu generates Filter option" {
     show_remove_worktree_menu 1
-    assert_contains "$CAPTURED_MENU_OPTIONS" '"Filter"'
+    assert_contains "$CAPTURED_MENU_OPTIONS" 'Filter'
 }
 
 @test "remove worktree menu shows removable worktrees" {
@@ -230,16 +229,18 @@ teardown() {
 }
 
 @test "remove worktree menu run-shell command has valid quoting structure" {
-    # Regression test: script path must be single-quoted for proper shell execution
+    # Regression test: tk_menu_cmd produces single-quoted args for run-shell
     local wt_dir="${BATS_TMPDIR}/worktrees-$$"
     mkdir -p "$wt_dir"
     git worktree add -q "$wt_dir/feature-one" feature-one
 
     show_remove_worktree_menu 1
 
-    # The pattern should be 'script_path' not '"'script_path'"'
-    # Check for properly quoted path pattern: '/path/to/script' remove_worktree
-    assert_contains "$CAPTURED_MENU_OPTIONS" "worktree_manager.sh' remove_worktree"
+    # tk_menu_cmd produces: run-shell '/path/to/script' 'remove_worktree' ...
+    assert_contains "$CAPTURED_MENU_OPTIONS" "run-shell"
+    assert_contains "$CAPTURED_MENU_OPTIONS" "remove_worktree"
+    # Script path should be single-quoted (not double-quoted)
+    assert_contains "$CAPTURED_MENU_OPTIONS" "worktree_manager.sh'"
 
     git worktree remove --force "$wt_dir/feature-one" 2>/dev/null || true
     rm -rf "$wt_dir"

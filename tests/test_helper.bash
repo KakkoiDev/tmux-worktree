@@ -9,6 +9,9 @@ export TMUX_TMPDIR="${BATS_TMPDIR:-/tmp}"
 # the user's socket. Combined with the stub below, every tmux invocation
 # from test code routes to -L "$TMUX_SOCKET" (the isolated test server).
 unset TMUX TMUX_PANE
+# Unset TK_SOCKET so tk_tmux does not prepend another -L; the stub below
+# already adds -L "$TMUX_SOCKET" to every non-UI call.
+TK_SOCKET=""
 
 # Shadow `tmux` for all tests that load this helper.
 #
@@ -26,21 +29,39 @@ unset TMUX TMUX_PANE
 #      attached client so they would error anyway.
 #   2. Everything else forwards to the isolated server via -L $TMUX_SOCKET
 #      so session/window ops are real and tests can assert on them.
+#
+# tk_tmux prepends -L $TK_SOCKET so the subcommand may not be $1. Scan past
+# known flags (-L, -S) to find it.
+_tmux_find_cmd() {
+    local _skip_next=0 _a
+    for _a in "$@"; do
+        if [ "$_skip_next" = "1" ]; then
+            _skip_next=0
+            continue
+        fi
+        case "$_a" in
+            -L|-S) _skip_next=1 ;;  # skip flag and its argument
+            -*) ;;                   # skip other flags (no-arg)
+            *) printf '%s' "$_a"; return ;;
+        esac
+    done
+    printf '%s' "$1"  # fallback
+}
+
 tmux() {
     if [ -n "$TMUX" ]; then
         command tmux "$@"
         return
     fi
-    case "$1" in
+    local _cmd
+    _cmd=$(_tmux_find_cmd "$@")
+    case "$_cmd" in
         display-menu|display-popup|command-prompt)
             return 0 ;;
         display-message)
-            # `display-message -p ...` is a query that prints to stdout (no client
-            # required), so route it to the test server. Status-line UI messages
-            # (no -p) need an attached client and are suppressed.
-            local _arg
-            for _arg in "$@"; do
-                case "$_arg" in
+            local _a
+            for _a in "$@"; do
+                case "$_a" in
                     -p|-p*) command tmux -L "$TMUX_SOCKET" "$@"; return ;;
                 esac
             done
@@ -49,7 +70,7 @@ tmux() {
             command tmux -L "$TMUX_SOCKET" "$@" ;;
     esac
 }
-export -f tmux
+export -f tmux _tmux_find_cmd
 
 # Plugin paths (set relative to test_helper.bash location, not test file)
 _HELPER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

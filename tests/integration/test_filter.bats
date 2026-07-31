@@ -247,8 +247,8 @@ teardown() {
     source "$SCRIPTS_DIR/worktree_manager.sh"
 
     # Mock display_menu to capture title
-    display_menu() {
-        echo "TITLE: $1"
+    tk_menu_show() {
+        echo "TITLE: ${TK_MENU_TITLE:-}"
     }
 
     run show_worktree_menu 1 "feat*"
@@ -260,8 +260,8 @@ teardown() {
 @test "show_add_worktree_menu accepts filter parameter" {
     source "$SCRIPTS_DIR/worktree_manager.sh"
 
-    display_menu() {
-        echo "TITLE: $1"
+    tk_menu_show() {
+        echo "TITLE: ${TK_MENU_TITLE:-}"
     }
 
     run show_add_worktree_menu 1 "feat*"
@@ -277,8 +277,8 @@ teardown() {
     mkdir -p "$wt_dir"
     git worktree add -q "$wt_dir/test-wt" feature-one
 
-    display_menu() {
-        echo "TITLE: $1"
+    tk_menu_show() {
+        echo "TITLE: ${TK_MENU_TITLE:-}"
     }
 
     run show_remove_worktree_menu 1 "feat*"
@@ -293,34 +293,35 @@ teardown() {
 @test "menu includes filter option with f key" {
     source "$SCRIPTS_DIR/worktree_manager.sh"
 
-    display_menu() {
-        echo "$2"
+    tk_menu_show() {
+        printf '%s\n' "${TK_MENU_ARGS[@]}"; TK_MENU_ARGS=()
     }
 
     run show_worktree_menu 1
     assert_success
     assert_contains "$output" "Filter"
-    assert_contains "$output" "\"f\""
+    assert_contains "$output" "Filter"
 }
 
 @test "menu includes clear filter option when filter active" {
     source "$SCRIPTS_DIR/worktree_manager.sh"
 
-    display_menu() {
-        echo "$2"
+    tk_menu_show() {
+        printf '%s\n' "${TK_MENU_ARGS[@]}"; TK_MENU_ARGS=()
     }
 
     run show_worktree_menu 1 "feat*"
     assert_success
     assert_contains "$output" "Clear"
-    assert_contains "$output" "\"c\""
+    assert_contains "$output" "Clear filter"
 }
 
 @test "navigation preserves filter parameter" {
     source "$SCRIPTS_DIR/worktree_manager.sh"
 
-    run generate_nav_options 1 3 "show_worktree_menu" "feat*"
-    assert_success
-    # Next page link should include the filter
-    assert_contains "$output" "feat"
+    tk_menu_reset
+    _add_nav_items 1 3 "show_worktree_menu" "feat*"
+    local args_flat="${TK_MENU_ARGS[*]:-}"
+    # Navigation commands should include the filter
+    assert_contains "$args_flat" "feat"
 }

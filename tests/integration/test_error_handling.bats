@@ -298,21 +298,27 @@ teardown() {
 # MENU GENERATION EDGE CASES
 # ==============================================================================
 
-@test "generate_nav_options handles page 1 of 1" {
-    run generate_nav_options 1 1 "show_worktree_menu" "" ""
-    assert_success
+@test "_add_nav_items handles page 1 of 1" {
+    source "$SCRIPTS_DIR/worktree_manager.sh"
+
+    tk_menu_reset
+    _add_nav_items 1 1 "show_worktree_menu"
+    local args_flat="${TK_MENU_ARGS[*]:-}"
     # Should have Back option but no Next/Previous
-    assert_contains "$output" "Back"
-    refute_contains "$output" "Next"
-    refute_contains "$output" "Previous"
+    assert_contains "$args_flat" "Back"
+    refute_contains "$args_flat" "Next"
+    refute_contains "$args_flat" "Previous"
 }
 
-@test "generate_nav_options handles middle page" {
-    run generate_nav_options 2 3 "show_worktree_menu" "" ""
-    assert_success
+@test "_add_nav_items handles middle page" {
+    source "$SCRIPTS_DIR/worktree_manager.sh"
+
+    tk_menu_reset
+    _add_nav_items 2 3 "show_worktree_menu"
+    local args_flat="${TK_MENU_ARGS[*]:-}"
     # Should have both Next and Previous
-    assert_contains "$output" "Next"
-    assert_contains "$output" "Previous"
+    assert_contains "$args_flat" "Next"
+    assert_contains "$args_flat" "Previous"
 }
 
 @test "display_menu handles empty options" {
