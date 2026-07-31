@@ -8,6 +8,7 @@
 # VERSION
 # ==============================================================================
 
+# shellcheck disable=SC2034 # Public variable consumed by worktree_manager.sh.
 TMUX_WORKTREE_VERSION="0.1.0"
 
 # Determine plugin directory (works when sourced or executed)
@@ -19,6 +20,7 @@ else
     PLUGIN_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 fi
 
+# shellcheck disable=SC2034 # Public variable used by plugin loaders and tests.
 SCRIPTS_DIR="$PLUGIN_DIR/scripts"
 
 # ==============================================================================
@@ -34,7 +36,7 @@ SCRIPTS_DIR="$PLUGIN_DIR/scripts"
 # `if [ -n "$TMUX_SOCKET" ]` branches into one. tk_tmux prepends -L when it is
 # set, so every call site becomes a plain `tk_tmux ...` with no fork.
 
-# shellcheck source=../lib/toolkit.sh
+# shellcheck disable=SC1091 # Runtime path is derived from the plugin checkout.
 source "$PLUGIN_DIR/lib/toolkit.sh"
 tk_require_version 0.2.0
 tk_init worktree "${WORKTREE_BASE:-$HOME/.tmux-worktree}"
@@ -268,6 +270,7 @@ load_config() {
 
     if _is_cache_valid "$cache_file"; then
         # Fast path: read from cache file
+        # shellcheck disable=SC1090 # The generated cache path is intentionally dynamic.
         source "$cache_file"
         debug_log "load_config: from cache=$cache_file"
     else

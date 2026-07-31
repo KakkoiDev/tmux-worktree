@@ -92,15 +92,15 @@ teardown() {
 # WORKTREE DATA TESTS
 # ==============================================================================
 
-@test "get_worktree_data returns menu format" {
+@test "get_worktree_data returns TSV data" {
     local wt_dir="$WORKTREE_BASE/$(get_project_name)/feature-one"
     mkdir -p "$(dirname "$wt_dir")"
     git worktree add -q "$wt_dir" feature-one
 
     run get_worktree_data 1 ""
     assert_success
-    assert_contains "$output" 'feature-one'
-    assert_contains "$output" 'run-shell'
+    assert_contains "$output" $'feature-one\tfeature-one\t'
+    [[ "$output" != *run-shell* ]]
 
     git worktree remove --force "$wt_dir"
 }

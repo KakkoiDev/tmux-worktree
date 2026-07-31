@@ -35,6 +35,7 @@ matches_filter() {
     # Use bash extended pattern matching
     # * becomes * (works in case)
     # ? becomes ? (works in case)
+    # shellcheck disable=SC2254 # The user-supplied glob is intentional here.
     case "$lower_string" in
         $lower_pattern) return 0 ;;
         *) return 1 ;;

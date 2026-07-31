@@ -11,7 +11,8 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        tmux-version: ['3.2', '3.3', '3.4']
+        # README.md supports tmux 3.0+, so keep the compatibility floor in CI.
+        tmux-version: ['3.0', '3.1', '3.2', '3.3', '3.4']
       fail-fast: false
 
     steps:
@@ -51,9 +52,7 @@ jobs:
         run: sudo apt-get install -y shellcheck
 
       - name: Lint scripts
-        run: |
-          shellcheck scripts/*.sh || true
-          echo "Shellcheck completed (warnings allowed)"
+        run: shellcheck scripts/*.sh
 
       # lib/ is vendored from KakkoiDev/tmux-toolkit via git subtree. Editing it
       # in place here is how five plugins accumulated 26 duplicated helpers in
@@ -72,6 +71,27 @@ jobs:
             exit 1
           fi
           echo "lib/ matches tmux-toolkit $(cat lib/VERSION)"
+
+  bash-3-2:
+    # macOS still ships /bin/bash 3.2, the minimum documented in README.md.
+    runs-on: macos-15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: brew install bats-core expect tmux
+
+      - name: Verify compatibility shell
+        run: |
+          /bin/bash --version
+          /bin/bash -c '[[ ${BASH_VERSINFO[0]}.${BASH_VERSINFO[1]} == 3.2 ]]'
+
+      - name: Run unit tests with Bash 3.2
+        run: make test-unit SHELL=/bin/bash
+
+      - name: Run integration tests with Bash 3.2
+        run: make test-integration SHELL=/bin/bash
 
   smoke:
     runs-on: ubuntu-latest
